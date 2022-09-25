@@ -1,0 +1,5 @@
+snake
+*.obj
+*.pdb
+*.exe
+.vscode
