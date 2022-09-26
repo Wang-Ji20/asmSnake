@@ -38,17 +38,22 @@
 #include <conio.h>
 #include <Windows.h>
 #pragma comment(lib,"user32.lib");
+#pragma comment(lib, "Gdi32.lib")
 #include <stdlib.h>
-#define N 25
-#define FPS 4
+#define N 100
+#define FPS 30
 
-volatile int changed = 1;
 
 char canvas[N][N];
 int head_pos_x = 1;
 int head_pos_y = 1;
 int length = 1;
 enum Direction{NORTH, SOUTH, WEST, EAST} direction;
+
+HDC g_hdc = NULL, g_mdc = NULL, g_bufdc=NULL;
+HBITMAP g_hfoodBitmap = NULL, g_hsnakeBitmap = NULL;
+void game_paint(HWND hwnd);
+
 
 int lose(int x, int y){
     if (x >= N || y >= N || x < 0 || y < 0 ) return 1;
@@ -59,69 +64,11 @@ int win(){
     return (length >= 5);
 }
 
-/* this function reads from keyboard, and set the direction for snake head. */
-void read_command(){
-    char cmd;
-    if(!kbhit()) return;
-    cmd = getch();
-    switch (cmd)
-    {
-        case 'w':
-            direction = NORTH;
-            break;
 
-        case 's':
-            direction = SOUTH;
-            break;
+void snake_creep(HWND hwnd){
 
-        case 'a':
-            direction = WEST;
-            break;
-            
-        case 'd':
-            direction = EAST;
-            break;
-
-        default:
-            break;
-
-    }
-}
-
-void ascii_strategy(){
-    /* ver 1.0 debug-only: ascii represented canvas */
-    if (!changed)
-    {
-        return;
-    }
-    changed = 0;
-    system("cls");
-    for (int i = 0; i < N; i++)
-    {
-        for (int j = 0; j < N; j++)
-        {
-            printf(" %c ", canvas[i][j]);
-        }
-        printf("\n");
-    }
-}
-
-void gui_strategy(){}
-
-void update_view(){
-    #ifndef GUI
-        ascii_strategy();
-    #endif
-    #ifdef GUI
-        gui_strategy();
-    #endif
-}
-
-void snake_move(){
-    read_command();
     int o_head_pos_x = head_pos_x;
     int o_head_pos_y = head_pos_y;
-    changed = 1;
     if (direction == NORTH)
     {
         head_pos_x--;
@@ -137,9 +84,6 @@ void snake_move(){
     else if (direction == EAST)
     {
         head_pos_y++;
-    }
-    else{
-        changed = 0;
     }
     
     if (lose(head_pos_x, head_pos_y))
@@ -182,16 +126,75 @@ void snake_move(){
 
     if (win())
     {
-        update_view();
-        printf("you win");
+        // messagebox
+        MessageBox(hwnd, L"win", L"You win!!!", MB_OK);
         Sleep(1000);
         exit(0);
     }
-    
-
 }
-#ifndef GUI
-int main(void){
+
+HANDLE g_hOutput;
+
+// void console_init(void){
+//     AllocConsole();
+//     SetConsoleTitle(L"debug");
+//     g_hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+// }
+
+void game_paint(HWND hwnd){
+    g_hdc = GetDC(hwnd);
+    HBITMAP bmp = CreateCompatibleBitmap(g_hdc, 1001, 1001);
+    SelectObject(g_mdc, bmp);
+    
+    for (int i = 0; i < N; i++)
+    {
+        for (int j = 0; j < N; j++)
+        {
+            if (canvas[i][j] == '.')
+            {
+                SelectObject(g_bufdc, g_hfoodBitmap);
+                BitBlt(g_mdc, (1000)/N*j, (1000)/N*i, (1000)/N, (1000)/N, g_bufdc, 0, 0, SRCCOPY);
+            }
+            else if(canvas[i][j] >= 'A'){
+                SelectObject(g_bufdc, g_hsnakeBitmap);
+                BitBlt(g_mdc, (1000)/N*j, (1000)/N*i, (1000)/N, (1000)/N, g_bufdc, 0, 0, SRCCOPY);
+            }
+            //wchar_t tmp = canvas[i][j];
+            //WriteConsole(g_hOutput, &tmp, 1, 0, 0);
+        }
+        //wchar_t tmp = '\n';
+        //WriteConsole(g_hOutput, &tmp, 1, 0, 0);
+    }
+    //wchar_t tmp[10] = L"=========";
+    //WriteConsole(g_hOutput, &tmp, 10, 0, 0);
+    BitBlt(g_hdc, 0, 0, 1001, 1001, g_mdc, 0, 0, SRCCOPY);
+    //MessageBox(hwnd, L"aa", L"aa", MB_OK);
+    ReleaseDC(hwnd, g_hdc);
+}
+
+void game_init(HWND hwnd){
+    g_hdc = GetDC(hwnd);
+    g_hfoodBitmap = (HBITMAP) LoadImage(NULL, L"food.bmp", IMAGE_BITMAP, (1000)/N, (1000)/N, LR_LOADFROMFILE);
+    g_hsnakeBitmap = (HBITMAP) LoadImage(NULL, L"snake.bmp", IMAGE_BITMAP, (1000)/N, (1000)/N, LR_LOADFROMFILE);
+    g_mdc = CreateCompatibleDC(g_hdc);
+    g_bufdc = CreateCompatibleDC(g_hdc);
+    ReleaseDC(hwnd, g_hdc);
+
+    game_paint(hwnd);
+}
+
+void game_clean(HWND hwnd){
+    DeleteObject(g_hsnakeBitmap);
+    DeleteObject(g_hfoodBitmap);
+    DeleteDC(g_mdc);
+    DeleteDC(g_bufdc);
+}
+
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow)
+{
+
     for (int i = 0; i < N; i++)
     {
         for (int j = 0; j < N; j++)
@@ -203,22 +206,7 @@ int main(void){
     canvas[10][10] = '.';
     canvas[head_pos_x][head_pos_y] = 'A';
 
-    while (1)
-    {
-        update_view();
-        snake_move();
-        Sleep(1000/FPS);
-    }
-    return 0;
-}
-#endif
-
-#ifdef GUI
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow)
-{
-
+    //console_init();
     // Register the window class.
     const wchar_t CLASS_NAME[]  = L"Sample Window Class";
     
@@ -235,7 +223,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
     HWND hwnd = CreateWindowEx(
         0,                              // Optional window styles.
         CLASS_NAME,                     // Window class
-        L"Learn to Program Windows",    // Window text
+        L"Greedy Snake",    // Window text
         WS_OVERLAPPEDWINDOW,            // Window style
 
         // Size and position
@@ -254,6 +242,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
 
     ShowWindow(hwnd, nCmdShow);
 
+    game_init(hwnd);
+    SetTimer(hwnd, 1, 1000/FPS, (TIMERPROC) NULL);
     // Run the message loop.
     MSG msg = { };
     while (GetMessage(&msg, NULL, 0, 0))
@@ -265,8 +255,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
     return 0;
 }
 
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    HDC hdc;
     switch (uMsg)
     {
     case WM_DESTROY:
@@ -276,16 +268,46 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-
-            // All painting occurs here, between BeginPaint and EndPaint.
-            FillRect(hdc, &ps.rcPaint, (HBRUSH) (COLOR_WINDOW+1));
+            g_hdc = BeginPaint(hwnd, &ps);
+            game_paint(hwnd);
             EndPaint(hwnd, &ps);
+            ValidateRect(hwnd, NULL);
+            return 0;
         }
-        return 0;
+    case WM_CHAR:
+        {
+            switch (wParam)
+            {
+                case 'w':
+                    direction = NORTH;
+                    break;
+
+                case 's':
+                    direction = SOUTH;
+                    break;
+
+                case 'a':
+                    direction = WEST;
+                    break;
+                    
+                case 'd':
+                    direction = EAST;
+                    break;
+
+                default:
+                    break;
+
+            }
+            game_paint(hwnd);
+            return 0;
+        }
+    case WM_TIMER:
+        {
+            snake_creep(hwnd);
+            game_paint(hwnd);
+            return 0;
+        }
     }
 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
-
-#endif
