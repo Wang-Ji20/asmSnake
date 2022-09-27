@@ -50,6 +50,11 @@ int head_pos_y = 1;
 int length = 1;
 enum Direction{NORTH, SOUTH, WEST, EAST} direction;
 
+/**
+ *  g_hdc --- 
+ * 
+ */
+
 HDC g_hdc = NULL, g_mdc = NULL, g_bufdc=NULL;
 HBITMAP g_hfoodBitmap = NULL, g_hsnakeBitmap = NULL;
 void game_paint(HWND hwnd);
