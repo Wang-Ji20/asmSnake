@@ -2,11 +2,5 @@
 1. windows 环境下，用 vs dev prompt 进入此目录，然后 code . 打开 vscode。否则用不了 MSVC 编译器！
     之所以要用 MSVC 是因为有很多 windows 开发的库。
 
-2. ASCII 控制台模式的编译命令为：
-
->>> cl snake.cpp
-
-GUI 模式为：
-
->>> cl snake.cpp /DGUI /link /SUBSYSTEM:WINDOWS
-
+2. 编译命令为：：
+>>> cl snake.cpp /link /SUBSYSTEM:WINDOWS

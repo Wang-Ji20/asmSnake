@@ -3,3 +3,4 @@ snake
 *.pdb
 *.exe
 .vscode
+tmp.cpp
