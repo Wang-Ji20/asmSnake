@@ -19,7 +19,7 @@
        E: . > N ^ n ~
        F: / ? O _ o DEL
         
-    从 A 到 z：蛇 
+    从 A 到 Z：蛇1 
         A 蛇的头
         B 蛇身上的第二节 以此类推
     . 食物
@@ -37,64 +37,101 @@
 #include <stdio.h>
 #include <conio.h>
 #include <Windows.h>
+#include <time.h>
 #pragma comment(lib,"user32.lib");
 #pragma comment(lib, "Gdi32.lib")
 #include <stdlib.h>
-#define N 100
-#define FPS 30
+#define N 80
+#define WIDTH 800
+//#define HEIGHT 1000
+#define INIT_FOODNUM 5
+#define INIT_LENGTH 3
+#define WINNING_LENGTH 20
 
+int FPS = 15;
 
 char canvas[N][N];
-int head_pos_x = 1;
-int head_pos_y = 1;
-int length = 1;
-enum Direction{NORTH, SOUTH, WEST, EAST} direction;
+int head_pos_x1 = 1, head_pos_y1 = 1;
+int head_pos_x2 = N - 2, head_pos_y2 = N - 2;
+int length1 = INIT_LENGTH, length2 = INIT_LENGTH;
+enum Direction{NORTH, SOUTH, WEST, EAST} direction1, direction2, dtmp1, dtmp2;
 
 /**
  *  g_hdc --- 
  * 
  */
 
-HDC g_hdc = NULL, g_mdc = NULL, g_bufdc=NULL;
-HBITMAP g_hfoodBitmap = NULL, g_hsnakeBitmap = NULL;
+HDC g_hdc = NULL, g_mdc = NULL, g_bufdc = NULL;
+HBITMAP g_hfoodBitmap = NULL, g_hsnake1Bitmap = NULL, g_hsnake2Bitmap = NULL, g_hwallBitmap = NULL;
 void game_paint(HWND hwnd);
+void game_clean(HWND hwnd);
 
-
-int lose(int x, int y){
-    if (x >= N || y >= N || x < 0 || y < 0 ) return 1;
-    return 0;
+bool lose(int x, int y){
+    if (x >= N || y >= N || x < 0 || y < 0) return true;
+    if (canvas[x][y] == '*' || canvas[x][y] >= '@') return true;
+    return false;
 }
 
-int win(){
-    return (length >= 5);
+bool win(int length){
+    return (length >= WINNING_LENGTH);
 }
-
 
 void snake_creep(HWND hwnd){
-
-    int o_head_pos_x = head_pos_x;
-    int o_head_pos_y = head_pos_y;
-    if (direction == NORTH)
+    direction1 = dtmp1;
+    direction2 = dtmp2;
+    if (direction1 == NORTH)
     {
-        head_pos_x--;
+        head_pos_x1--;
     }
-    else if (direction == SOUTH)
+    else if (direction1 == SOUTH)
     {
-        head_pos_x++;
+        head_pos_x1++;
     }
-    else if (direction == WEST)
+    else if (direction1 == WEST)
     {
-        head_pos_y--;
+        head_pos_y1--;
     }
-    else if (direction == EAST)
+    else if (direction1 == EAST)
     {
-        head_pos_y++;
+        head_pos_y1++;
+    }
+    if (direction2 == NORTH)
+    {
+        head_pos_x2--;
+    }
+    else if (direction2 == SOUTH)
+    {
+        head_pos_x2++;
+    }
+    else if (direction2 == WEST)
+    {
+        head_pos_y2--;
+    }
+    else if (direction2 == EAST)
+    {
+        head_pos_y2++;
     }
     
-    if (lose(head_pos_x, head_pos_y))
+    if (lose(head_pos_x1, head_pos_y1))
     {
-        printf("you lose");
-        Sleep(1000);
+        game_clean(hwnd);
+        int msgboxID = MessageBox(
+            NULL,
+            (LPCWSTR)L"Player2 win!",
+            (LPCWSTR)L"Game over",
+            0
+        );
+        exit(0);
+    }
+    if (lose(head_pos_x2, head_pos_y2))
+    {
+        game_clean(hwnd);
+        int msgboxID = MessageBox(
+            NULL,
+            (LPCWSTR)L"Player1 win!",
+            (LPCWSTR)L"Game over",
+            0
+        );
         exit(0);
     }
 
@@ -102,11 +139,11 @@ void snake_creep(HWND hwnd){
     {
         for (int j = 0; j < N; j++)
         {
-            if (i == head_pos_x && j == head_pos_y)
+            if (i == head_pos_x1 && j == head_pos_y1)
             {
                 if (canvas[i][j] == '.')
                 {
-                    length++;
+                    length1++;
                     while(1)
                     {
                         int p = rand() % (N*N);
@@ -119,23 +156,94 @@ void snake_creep(HWND hwnd){
                 }
                 canvas[i][j] = '@';
             }
+            if (i == head_pos_x2 && j == head_pos_y2)
+            {
+                if (canvas[i][j] == '.')
+                {
+                    length2++;
+                    while(1)
+                    {
+                        int p = rand() % (N*N);
+                        if (canvas[p / N][p % N] == ' ')
+                        {
+                            canvas[p / N][p % N] = '.';
+                            break;
+                        }
+                    }
+                }
+                if (canvas[i][j] == '@')
+                {
+                    game_clean(hwnd);
+                    if (length1 > length2)
+                    {
+                        int msgboxID = MessageBox(
+                            NULL,
+                            (LPCWSTR)L"Player1 win!",
+                            (LPCWSTR)L"Game over",
+                            0
+                        );
+                    }
+                    else if (length1 < length2)
+                    {
+                        int msgboxID = MessageBox(
+                            NULL,
+                            (LPCWSTR)L"Player2 win!",
+                            (LPCWSTR)L"Game over",
+                            0
+                        );
+                    }
+                    else
+                    {
+                        int msgboxID = MessageBox(
+                            NULL,
+                            (LPCWSTR)L"Draw!",
+                            (LPCWSTR)L"Game over",
+                            0
+                        );
+                    }
+                    exit(0);
+                }
+                canvas[i][j] = '`';
+            }
             
-            if (canvas[i][j] <= 'z' && canvas[i][j] >= '@')
+            if (canvas[i][j] <= 'Z' && canvas[i][j] >= '@')
             {
                 canvas[i][j] += 1; 
-                if (canvas[i][j] - '@' > length)
+                if (canvas[i][j] - '@' > length1)
+                    canvas[i][j] = ' ';
+            }
+            if (canvas[i][j] <= 'z' && canvas[i][j] >= '`')
+            {
+                canvas[i][j] += 1; 
+                if (canvas[i][j] - '`' > length2)
                     canvas[i][j] = ' ';
             }
         }
     }
 
-    if (win())
+    if (win(length1))
     {
-        // messagebox
-        MessageBox(hwnd, L"win", L"You win!!!", MB_OK);
-        Sleep(1000);
+        game_clean(hwnd);
+        int msgboxID = MessageBox(
+            NULL,
+            (LPCWSTR)L"Player1 win!",
+            (LPCWSTR)L"Game over",
+            0
+        );
         exit(0);
     }
+    if (win(length2))
+    {
+        game_clean(hwnd);
+        int msgboxID = MessageBox(
+            NULL,
+            (LPCWSTR)L"Player2 win!",
+            (LPCWSTR)L"Game over",
+            0
+        );
+        exit(0);
+    }
+
 }
 
 HANDLE g_hOutput;
@@ -148,7 +256,7 @@ HANDLE g_hOutput;
 
 void game_paint(HWND hwnd){
     g_hdc = GetDC(hwnd);
-    HBITMAP bmp = CreateCompatibleBitmap(g_hdc, 1001, 1001);
+    HBITMAP bmp = CreateCompatibleBitmap(g_hdc, WIDTH, WIDTH);
     SelectObject(g_mdc, bmp);
     
     for (int i = 0; i < N; i++)
@@ -158,11 +266,19 @@ void game_paint(HWND hwnd){
             if (canvas[i][j] == '.')
             {
                 SelectObject(g_bufdc, g_hfoodBitmap);
-                BitBlt(g_mdc, (1000)/N*j, (1000)/N*i, (1000)/N, (1000)/N, g_bufdc, 0, 0, SRCCOPY);
+                BitBlt(g_mdc, (WIDTH)/N*j, (WIDTH)/N*i, (WIDTH)/N, (WIDTH)/N, g_bufdc, 0, 0, SRCCOPY);
             }
-            else if(canvas[i][j] >= 'A'){
-                SelectObject(g_bufdc, g_hsnakeBitmap);
-                BitBlt(g_mdc, (1000)/N*j, (1000)/N*i, (1000)/N, (1000)/N, g_bufdc, 0, 0, SRCCOPY);
+            else if(canvas[i][j] == '*'){
+                SelectObject(g_bufdc, g_hwallBitmap);
+                BitBlt(g_mdc, (WIDTH)/N*j, (WIDTH)/N*i, (WIDTH)/N, (WIDTH)/N, g_bufdc, 0, 0, SRCCOPY);
+            }
+            else if(canvas[i][j] >= 'A' && canvas[i][j] <= 'Z'){
+                SelectObject(g_bufdc, g_hsnake1Bitmap);
+                BitBlt(g_mdc, (WIDTH)/N*j, (WIDTH)/N*i, (WIDTH)/N, (WIDTH)/N, g_bufdc, 0, 0, SRCCOPY);
+            }
+            else if(canvas[i][j] >= 'a' && canvas[i][j] <= 'z'){
+                SelectObject(g_bufdc, g_hsnake2Bitmap);
+                BitBlt(g_mdc, (WIDTH)/N*j, (WIDTH)/N*i, (WIDTH)/N, (WIDTH)/N, g_bufdc, 0, 0, SRCCOPY);
             }
             //wchar_t tmp = canvas[i][j];
             //WriteConsole(g_hOutput, &tmp, 1, 0, 0);
@@ -172,24 +288,52 @@ void game_paint(HWND hwnd){
     }
     //wchar_t tmp[10] = L"=========";
     //WriteConsole(g_hOutput, &tmp, 10, 0, 0);
-    BitBlt(g_hdc, 0, 0, 1001, 1001, g_mdc, 0, 0, SRCCOPY);
+    BitBlt(g_hdc, 0, 0, WIDTH, WIDTH, g_mdc, 0, 0, SRCCOPY);
     //MessageBox(hwnd, L"aa", L"aa", MB_OK);
     ReleaseDC(hwnd, g_hdc);
 }
 
 void game_init(HWND hwnd){
+    
+    for (int i = 0; i < N; i++)
+    {
+        for (int j = 0; j < N; j++)
+        {
+            canvas[i][j] = ' ';
+            if (i == 0 || i == N - 1 || j == 0 || j == N - 1) canvas[i][j] = '*';
+        }
+    }
+    dtmp1 = SOUTH;
+    canvas[head_pos_x1][head_pos_y1] = 'A';
+    canvas[head_pos_x2][head_pos_y2] = 'a';
+    srand(time(0));
+    for (int i = 0; i < INIT_FOODNUM; i++)
+    while(1)
+    {
+        int p = rand() % (N*N);
+        if (canvas[p / N][p % N] == ' ')
+        {
+            canvas[p / N][p % N] = '.';
+            break;
+        }
+    }
     g_hdc = GetDC(hwnd);
-    g_hfoodBitmap = (HBITMAP) LoadImage(NULL, L"food.bmp", IMAGE_BITMAP, (1000)/N, (1000)/N, LR_LOADFROMFILE);
-    g_hsnakeBitmap = (HBITMAP) LoadImage(NULL, L"snake.bmp", IMAGE_BITMAP, (1000)/N, (1000)/N, LR_LOADFROMFILE);
+    g_hfoodBitmap = (HBITMAP) LoadImage(NULL, L"food.bmp", IMAGE_BITMAP, (WIDTH)/N, (WIDTH)/N, LR_LOADFROMFILE);
+    g_hsnake1Bitmap = (HBITMAP) LoadImage(NULL, L"snake1.bmp", IMAGE_BITMAP, (WIDTH)/N, (WIDTH)/N, LR_LOADFROMFILE);
+    g_hsnake2Bitmap = (HBITMAP) LoadImage(NULL, L"snake2.bmp", IMAGE_BITMAP, (WIDTH)/N, (WIDTH)/N, LR_LOADFROMFILE);
+    g_hwallBitmap = (HBITMAP) LoadImage(NULL, L"wall.bmp", IMAGE_BITMAP, (WIDTH)/N, (WIDTH)/N, LR_LOADFROMFILE);
     g_mdc = CreateCompatibleDC(g_hdc);
     g_bufdc = CreateCompatibleDC(g_hdc);
     ReleaseDC(hwnd, g_hdc);
-
+    
+    SetTimer(hwnd, 1, 1000/FPS, (TIMERPROC) NULL);
+    
     game_paint(hwnd);
 }
 
 void game_clean(HWND hwnd){
-    DeleteObject(g_hsnakeBitmap);
+    KillTimer(hwnd, 1); 
+    DeleteObject(g_hsnake1Bitmap);
     DeleteObject(g_hfoodBitmap);
     DeleteDC(g_mdc);
     DeleteDC(g_bufdc);
@@ -199,17 +343,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow)
 {
-
-    for (int i = 0; i < N; i++)
-    {
-        for (int j = 0; j < N; j++)
-        {
-            canvas[i][j] = ' ';
-        }
-    }
-    direction = SOUTH;
-    canvas[10][10] = '.';
-    canvas[head_pos_x][head_pos_y] = 'A';
 
     //console_init();
     // Register the window class.
@@ -232,7 +365,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
         WS_OVERLAPPEDWINDOW,            // Window style
 
         // Size and position
-        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+        CW_USEDEFAULT, CW_USEDEFAULT, WIDTH + 15, WIDTH + 40,
 
         NULL,       // Parent window    
         NULL,       // Menu
@@ -248,7 +381,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
     ShowWindow(hwnd, nCmdShow);
 
     game_init(hwnd);
-    SetTimer(hwnd, 1, 1000/FPS, (TIMERPROC) NULL);
     // Run the message loop.
     MSG msg = { };
     while (GetMessage(&msg, NULL, 0, 0))
@@ -283,20 +415,44 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         {
             switch (wParam)
             {
+                case 'W':
                 case 'w':
-                    direction = NORTH;
+                    if (direction1 == WEST || direction1 == EAST) dtmp1 = NORTH;
                     break;
 
+                case 'S':
                 case 's':
-                    direction = SOUTH;
+                    if (direction1 == WEST || direction1 == EAST) dtmp1 = SOUTH;
                     break;
 
+                case 'A':
                 case 'a':
-                    direction = WEST;
+                    if (direction1 == NORTH || direction1 == SOUTH) dtmp1 = WEST;
                     break;
-                    
+
+                case 'D':
                 case 'd':
-                    direction = EAST;
+                    if (direction1 == NORTH || direction1 == SOUTH) dtmp1 = EAST;
+                    break;
+
+                case 'I':
+                case 'i':
+                    if (direction2 == WEST || direction2 == EAST) dtmp2 = NORTH;
+                    break;
+
+                case 'K':
+                case 'k':
+                    if (direction2 == WEST || direction2 == EAST) dtmp2 = SOUTH;
+                    break;
+
+                case 'J':
+                case 'j':
+                    if (direction2 == NORTH || direction2 == SOUTH) dtmp2 = WEST;
+                    break;
+
+                case 'L':
+                case 'l':
+                    if (direction2 == NORTH || direction2 == SOUTH) dtmp2 = EAST;
                     break;
 
                 default:
