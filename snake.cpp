@@ -248,11 +248,7 @@ void snake_creep(HWND hwnd){
 
 HANDLE g_hOutput;
 
-// void console_init(void){
-//     AllocConsole();
-//     SetConsoleTitle(L"debug");
-//     g_hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-// }
+
 
 void game_paint(HWND hwnd){
     g_hdc = GetDC(hwnd);
