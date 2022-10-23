@@ -34,7 +34,7 @@ WndProc proto :DWORD, :DWORD, :DWORD, :DWORD
     head_pos_x2 DWORD 78
     head_pos_y2 DWORD 78
     length1 DWORD 3
-    length1 DWORD 3
+    length2 DWORD 3
     direction1 DWORD 0
     direction2 DWORD 0
     dtmp1 DWORD 0
@@ -48,10 +48,17 @@ WndProc proto :DWORD, :DWORD, :DWORD, :DWORD
     g_hsnake2Bitmap HBITMAP 0
     g_hwallBitmap HBITMAP 0
 
+    g_output HANDLE 0
+
     player2wintxt db "Player2 win!", 0
     player1wintxt db "Player1 win!", 0
     drawtxt db "Draw!", 0
     gameovertxt db "Game over", 0
+    
+    foodAssetsPos db "food.bmp", 0
+    snake1AssetsPos db "snake1.bmp", 0
+    snake2AssetsPos db "snake2.bmp", 0
+    wallAssetsPos db "wall.bmp", 0
 
 .code
 
@@ -69,12 +76,14 @@ lose PROC x :DWORD, y :DWORD
 
 lose ENDP
 
-win PROC length :DWORD
+win PROC snakelength :DWORD
+
     mov eax, 0
-    .IF length >= 20
+    .IF snakelength >= 20
         mov eax, 1
     .ENDIF
     ret
+    
 win ENDP
 
 snake_creep PROC hwnd :HWND
@@ -118,12 +127,12 @@ snake_creep PROC hwnd :HWND
         INVOKE ExitProcess, 0
     .ENDIF
 
-    .LOCAL i:DWORD
-    .LOCAL j:DWORD
+    LOCAL i:DWORD
+    LOCAL j:DWORD
     mov eax, 0
     mov i, eax
     mov j, eax
-    .LOCAL p:DWORD
+    LOCAL p:DWORD
     .WHILE i < 80
         .WHILE j < 80
             .IF i == head_pos_x1 && j == head_pos_y1
@@ -135,10 +144,9 @@ snake_creep PROC hwnd :HWND
                         .IF canvas[p] == ' '
                             mov eax, '.'
                             mov canvas[p], eax
-                            jmp BREAK1
+                            .BREAK
                         .ENDIF
                     .ENDW
-                    BREAK1:
                 .ENDIF
                 mov eax, '@'
                 mov canvas[i * 80 + j], eax
@@ -150,9 +158,8 @@ snake_creep PROC hwnd :HWND
                         INVOKE rand
                         mov p, eax
                         mov canvas[p], eax
-                        jmp BREAK2
+                        .BREAK
                     .ENDW
-                    BREAK2:
                 .ENDIF
                 .IF canvas[i * 80 + j] == '@'
                     INVOKE game_clean, hwnd
@@ -207,9 +214,151 @@ snake_creep PROC hwnd :HWND
 
 snake_creep ENDP
 
-;TODO 253-290
+game_paint PROC hwnd : HWND
+    INVOKE GetDC, hwnd
+    mov g_hdc, eax
 
-;TODO 292-337
+    xor edi, edi
+    xor esi, esi
+    local i DWORD 0
+    local j DWORD 0
+
+    .WHILE i < 80
+        .WHILE j < 80
+            mov edi, i
+            mov esi, j
+            mov cx, canvas[esi + edi * 80]
+            .IF cx == 46
+                push edi
+                push esi
+                push ecx 
+                INVOKE SelectObject, g_bufdc, g_hfoodBitmap
+                INVOKE BitBlt, g_mdc, 10*j, 10*i,  10, 10, g_bufdc, 0, 0, SRCCOPY
+                pop ecx
+                pop esi
+                pop edi
+            .ELSEIF cx == 42
+                push edi
+                push esi
+                push ecx 
+                INVOKE SelectObject, g_bufdc, g_hwallBitmap
+                INVOKE BitBlt, g_mdc, 10*j, 10*i,  10, 10, g_bufdc, 0, 0, SRCCOPY
+                pop ecx
+                pop esi
+                pop edi
+            .ELSEIF cx >= 41 && cx <= 90
+                push edi
+                push esi
+                push ecx 
+                INVOKE SelectObject, g_bufdc, g_hsnake1Bitmap
+                INVOKE BitBlt, g_mdc, 10*j, 10*i,  10, 10, g_bufdc, 0, 0, SRCCOPY
+                pop ecx
+                pop esi
+                pop edi                
+            .ELSEIF cx >= 61 && cx <= 122
+                push edi
+                push esi
+                push ecx 
+                INVOKE SelectObject, g_bufdc, g_hsnake2Bitmap
+                INVOKE BitBlt, g_mdc, 10*j, 10*i,  10, 10, g_bufdc, 0, 0, SRCCOPY
+                pop ecx
+                pop esi
+                pop edi
+            .ENDIF
+        .ENDW
+    .ENDW
+
+    INVOKE BitBlt, g_hdc, 0, 0, 800, 800, g_mdc, 0, 0, SRCCOPY
+
+    INVOKE ReleaseDC, hwnd, g_hdc
+game_paint ENDP
+
+game_init PROC hwnd :HWND
+    local i DWORD 0
+    local j DWORD 0
+    mov i, 80
+
+    .WHILE i < 80
+        .WHILE j < 80
+            mov cx, 32
+            mov [j + 80*i], cx
+            .IF i == 0 || i == 79 || j == 0 || j == 79
+                mov cx, 42
+                mov [j + 80*i], cx
+            .ENDIF
+        .ENDW
+    .ENDW
+
+    local dtmp1 DWORD 1
+    mov canvas[head_pos_y1 + head_pos_x1 * 80], 'A'
+    mov canvas[head_pos_y2 + head_pos_x2 * 80], 'a'
+
+    INVOKE time, 0
+    INVOKE srand, eax
+
+    .WHILE 1
+        local p :DWORD
+        mov p, 0
+
+        INVOKE rand
+        div 640
+        mov p, ah
+
+        local row :DWORD
+        local col :DWORD
+        mov row, 0
+        mov col, 0
+
+        mov ax, p
+        div 80
+        mov row, al
+        mov col, ah
+
+        .IF canvas[ah + al*80] == 32
+            mov canvas[ah + al*80], 46
+            .BREAK
+        .ENDIF
+    .ENDW
+    
+    INVOKE GetDC, hwnd
+    mov g_hdc, eax
+
+    INVOKE LoadImage, NULL, offset foodAssetsPos, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
+    mov g_hfoodBitmap, eax
+    ; PTR eax maybe?
+
+    INVOKE LoadImage, NULL, offset foodAssetsPos, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
+    mov g_hsnake1Bitmap, eax
+
+    INVOKE LoadImage, NULL, offset foodAssetsPos, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
+    mov g_hsnake2Bitmap, eax
+
+    INVOKE LoadImage, NULL, offset foodAssetsPos, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
+    mov g_hwallBitmap, eax
+
+    INVOKE CreateCompatibleDC, g_hdc
+    mov g_mdc, eax
+
+    INVOKE CreateCompatibleDC, g_hdc
+    mov g_bufdc, eax    
+
+    INVOKE ReleaseDC, hwnd, g_hdc
+
+    INVOKE SetTimer, hwnd, 1, 100, NULL
+
+    INVOKE game_paint, hwnd 
+
+game_init ENDP
+
+game_clean PROC hwnd :HWND
+    INVOKE KillTimer, hwnd, 1
+    INVOKE DeleteObject, g_hsnake1Bitmap
+    INVOKE DeleteObject, g_hfoodBitmap
+    INVOKE DeleteDC, g_mdc
+    INVOKE DeleteDC, g_bufdc
+game_clean ENDP
+
+
 start:
     INVOKE GetModuleHandle, NULL
     mov hinitInstance, eax
@@ -251,7 +400,6 @@ WinMain PROC hInstance :DWORD,
         jmp Exit_Program
     .ENDIF
 
-;TODO 377
 
     mov hwnd, eax
     INVOKE ShowWindow, hwnd, nShowCmd
@@ -285,7 +433,13 @@ WndProc PROC,
         xor eax, eax
         ret
     .ELSEIF uMsg == WM_PAINT
-        ;TODO
+        local ps : PAINTSTRUCT
+        INVOKE BeginPaint, hwnd, addr ps
+        INVOKE game_paint, hwnd
+        INVOKE EndPaint, hwnd, addr ps
+        INVOKE ValidateRect, hwnd, NULL
+        
+        xor eax, eax
         ret
     .ELSEIF uMsg == WM_CHAR
         .IF wParam == 'W' || wParam == 'w'
