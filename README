@@ -1,6 +1,5 @@
-注意！！！
-1. windows 环境下，用 vs dev prompt 进入此目录，然后 code . 打开 vscode。否则用不了 MSVC 编译器！
-    之所以要用 MSVC 是因为有很多 windows 开发的库。
+1. 编译赛博朋克 C 语言义肢
+cl /c .\loadasset.cpp
 
-2. 编译命令为：：
->>> cl snake.cpp /link /SUBSYSTEM:WINDOWS
+2. 编译连接程序 加上赛博朋克 C 语言义肢
+ C:\masm32\bin\ml.exe /IC:\masm32\include /coff loadasset.obj appv2.asm /link /SUBSYSTEM:console /LIBPATH:C:\masm32\lib
