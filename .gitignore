@@ -4,3 +4,7 @@ snake
 *.exe
 .vscode
 tmp.cpp
+*.S
+easy.asm
+snakeCOP.cpp
+*.lnk
