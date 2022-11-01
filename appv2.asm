@@ -63,8 +63,12 @@ MAIN_WINDOW_STYLE = WS_VISIBLE+WS_DLGFRAME+WS_CAPTION+WS_BORDER+WS_SYSMENU \
 ;--------------------------;
 ; My Function Declarations ;
 ;--------------------------;
+SnakeCreep  PROTO :HWND
 GamePaint 	PROTO :HWND
 GameInit	PROTO :HWND
+GameClean   PROTO :HWND
+win PROTO :DWORD, :DWORD
+lose PROTO :DWORD
 myloadFood PROTO C
 myloadWall PROTO C
 myloadSnake1 PROTO C
@@ -284,26 +288,27 @@ WinProc PROC,
 		pushad
 		INVOKE crt_printf, ADDR keyboardMsgFmt, wParam
 		popad
-		.IF wParam == 'w' || wParam == 'W'
+		.IF wParam == 'w' || wParam == 'W' && direction1 == 2 || direction1 == 3
 			mov dtmp1, 0
-		.ELSEIF wParam == 'a' || wParam == 'A'
+		.ELSEIF wParam == 'a' || wParam == 'A' && direction1 == 0 || direction1 == 1
 			mov dtmp1, 2
-		.ELSEIF wParam == 's' || wParam == 's'
+		.ELSEIF wParam == 's' || wParam == 's' && direction1 == 2 || direction1 == 3
 			mov dtmp1, 1
-		.ELSEIF wParam == 'd' || wParam == 'D'
+		.ELSEIF wParam == 'd' || wParam == 'D' && direction1 == 0 || direction1 == 1
 			mov dtmp1, 3
-		.ELSEIF wParam == 'i' || wParam == 'I'
+		.ELSEIF wParam == 'i' || wParam == 'I' && direction2 == 2 || direction2 == 3
 			mov dtmp2, 0
-		.ELSEIF wParam == 'j' || wParam == 'J'
+		.ELSEIF wParam == 'j' || wParam == 'J' && direction2 == 0 || direction2 == 1
 			mov dtmp2, 2
-		.ELSEIF wParam == 'k' || wParam == 'L'
+		.ELSEIF wParam == 'k' || wParam == 'K' && direction2 == 2 || direction2 == 3
 			mov dtmp2, 1
-		.ELSEIF wParam == 'l' || wParam == 'L'
+		.ELSEIF wParam == 'l' || wParam == 'L' && direction2 == 0 || direction2 == 1
 			mov dtmp2, 3
 		.ENDIF
 		INVOKE GamePaint, hWnd
 		jmp WinProcExit
 	.ELSEIF eax == WM_TIMER
+        INVOKE SnakeCreep, hwnd
 		INVOKE GamePaint, hWnd
         xor eax, eax
         ret
@@ -340,6 +345,170 @@ messageID  DWORD ?
 	INVOKE LocalFree, pErrorMsg
 	ret
 ErrorHandler ENDP
+
+lose PROC x :DWORD, y :DWORD
+.IF (x >= 80) || (y >= N) || (x < 0) || (y < 0)
+	mov eax, 1
+	ret
+.ENDIF
+Get2dArr canvas, row, col, al
+.IF (al == '*') || (al >= '@')
+	mov eax, 1
+	ret
+.ENDIF
+mov eax, 0
+ret
+lose ENDP
+
+win PROC snakelength :DWORD
+mov eax, 0
+.IF snakelength >= 20
+	mov eax, 1
+.ENDIF
+ret
+win ENDP
+
+;----------------------------------------------------------
+SnakeCreep PROC,
+	hwnd :HWND
+; I know a bit about what it does and try to make it work.
+;----------------------------------------------------------
+mov eax, dtmp1
+mov direction1, eax
+mov eax, dtmp2
+mov direction2, eax
+.IF direction1 == 0
+	dec head_pos_x1
+.ELSEIF direction1 == 1
+	inc head_pos_x1
+.ELSEIF direction1 == 2
+	dec head_pos_y1
+.ELSEIF direction1 == 3
+	inc head_pos_y1
+.ENDIF
+.IF direction2 == 0
+	dec head_pos_x2
+.ELSEIF direction2 == 1
+	inc head_pos_x2
+.ELSEIF direction2 == 2
+	dec head_pos_y2
+.ELSEIF direction2 == 3
+	inc head_pos_y2
+.ENDIF
+
+INVOKE lose, head_pos_x1, head_pos_y1
+.IF eax == 1
+	INVOKE GameClean, hwnd
+	INVOKE MessageBox, 0, offset player2wintxt,
+			gameovertxt, 0
+	INVOKE ExitProcess, 0
+.ENDIF
+
+INVOKE lose, head_pos_x2, head_pos_y2
+.IF eax == 1
+	INVOKE GameClean, hwnd
+	INVOKE MessageBox, 0, offset player1wintxt,
+			gameovertxt, 0
+	INVOKE ExitProcess, 0
+.ENDIF
+
+LOCAL i:DWORD
+LOCAL j:DWORD
+mov eax, 0
+mov i, eax
+mov j, eax
+LOCAL p:DWORD
+.WHILE i < 80
+	.WHILE j < 80
+		.IF i == head_pos_x1 && j == head_pos_y1
+			Get2dArr canvas, i, j, al
+			.IF al == '.'
+				inc length1
+				.WHILE 1
+					INVOKE rand
+					mov p, eax
+					.IF canvas[p] == ' '
+						mov canvas[p], '.'
+						.BREAK
+					.ENDIF
+				.ENDW
+			.ENDIF
+			Mov2dArr canvas, i, j, '@'
+		.ENDIF
+		.IF i == head_pos_x2 && j == head_pos_y2
+			Get2dArr canvas, i, j, al
+			.IF al == '.'
+				inc length2
+				.WHILE 1
+					INVOKE rand
+					mov p, eax
+					.IF canvas[p] == ' '
+						mov canvas[p], '.'
+						.BREAK
+					.ENDIF
+				.ENDW
+			.ENDIF
+			.IF al == '@'
+				INVOKE GameClean, hwnd
+				.IF length1 > length2
+					INVOKE MessageBox, 0, offset player1wintxt,
+							gameovertxt, 0
+				.ELSEIF length1 < length2
+					INVOKE MessageBox, 0, offset player1wintxt,
+							gameovertxt, 0
+				.ELSE
+					INVOKE MessageBox, 0, offset drawtxt,
+							gameovertxt, 0
+				.ENDIF
+				INVOKE ExitProcess, 0
+			.ENDIF
+			Mov2dArr canvas, i, j, '`'
+		.ENDIF
+		Get2dArr canvas, i, j, al
+		.IF al <= 'Z' && al >= '@'
+			inc al
+			sub al, '@'
+			.IF al > length1
+				Mov2dArr canvas, i, j, ' '
+			.ENDIF
+		.ENDIF
+		Get2dArr canvas, i, j, al
+		.IF al <= 'z' && al >= '`'
+			inc al
+			sub al, '`'
+			.IF al > length2
+				Mov2dArr canvas, i, j, ' '
+			.ENDIF
+		.ENDIF
+		inc j
+	.ENDW
+	inc i
+.ENDW
+
+INVOKE win, length1
+.IF eax
+	INVOKE GameClean, hwnd
+	INVOKE MessageBox, 0, offset player1wintxt,
+			gameovertxt, 0
+	INVOKE ExitProcess, 0
+.ENDIF
+INVOKE win, length2
+.IF eax
+	INVOKE GameClean, hwnd
+	INVOKE MessageBox, 0, offset player2wintxt,
+			gameovertxt, 0
+	INVOKE ExitProcess, 0
+.ENDIF
+
+SnakeCreep ENDP
+
+GameClean PROC hwnd :HWND
+    INVOKE KillTimer, hwnd, 1
+    INVOKE DeleteObject, g_hsnake1Bitmap
+    INVOKE DeleteObject, g_hfoodBitmap
+    INVOKE DeleteDC, g_mdc
+    INVOKE DeleteDC, g_bufdc
+GameClean ENDP
 
 ;----------------------------------------------------------
 GamePaint PROC,

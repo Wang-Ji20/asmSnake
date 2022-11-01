@@ -457,7 +457,7 @@ WndProc PROC,
                 mov eax, 2
                 mov direction1, eax
             .ENDIF
-        .ELSEIF wParam == 'W' || wParam == 'w'
+        .ELSEIF wParam == 'D' || wParam == 'd'
             .IF direction1 == 0 || direction1 == 1
                 mov eax, 3
                 mov direction1, eax
