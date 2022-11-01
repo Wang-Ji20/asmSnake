@@ -1,503 +1,667 @@
+TITLE Greedy Snake                   (snake.asm)
+; Runnable version of Greedy Snake
+
 .386
-.model flat, stdcall
+.model flat, C
 option casemap: none
 
-include \masm32\include\msvcrt.inc
-include \masm32\include\windows.inc
-include \masm32\include\kernel32.inc
-include \masm32\include\user32.inc
-include \masm32\include\gdi32.inc
+include         windows.inc
+include         gdi32.inc
+includelib      gdi32.lib
+include         user32.inc
+includelib      user32.lib
+include         kernel32.inc
+includelib      kernel32.lib
+include         masm32.inc
+includelib      masm32.lib
+include         msvcrt.inc
+includelib      msvcrt.lib
+include         shell32.inc
+includelib      shell32.lib
+;------------------ Structures ----------------
 
-includelib \masm32\lib\msvcrt.lib
-includelib \masm32\lib\kernel32.lib
-includelib \masm32\lib\user32.lib
-includelib \masm32\lib\gdi32.lib
+WNDCLASS STRUC
+  style           DWORD ?
+  lpfnWndProc     DWORD ?
+  cbClsExtra      DWORD ?
+  cbWndExtra      DWORD ?
+  hInstance       DWORD ?
+  hIcon           DWORD ?
+  hCursor         DWORD ?
+  hbrBackground   DWORD ?
+  lpszMenuName    DWORD ?
+  lpszClassName   DWORD ?
+WNDCLASS ENDS
 
-szText macro name, text:vararg
-    local lbl
-    jmp lbl
-    name db text, 0
-    lbl:
-endm
+MSGStruct STRUCT
+  msgWnd        DWORD ?
+  msgMessage    DWORD ?
+  msgWparam     DWORD ?
+  msgLparam     DWORD ?
+  msgTime       DWORD ?
+  msgPt         POINT <>
+MSGStruct ENDS
 
-WinMain proto :DWORD, :DWORD, :DWORD, :DWORD
-WndProc proto :DWORD, :DWORD, :DWORD, :DWORD
+MAIN_WINDOW_STYLE = WS_VISIBLE+WS_DLGFRAME+WS_CAPTION+WS_BORDER+WS_SYSMENU \
+	+WS_MAXIMIZEBOX+WS_MINIMIZEBOX+WS_THICKFRAME
 
+;--------------------------;
+; My Function Declarations ;
+;--------------------------;
+SnakeCreep  PROTO :HWND
+GamePaint 	PROTO :HWND
+GameInit	PROTO :HWND
+GameClean   PROTO :HWND
+win PROTO :DWORD, :DWORD
+lose PROTO :DWORD
+;-----------------------;
+; My Macro Declarations ;
+;-----------------------;
+
+
+; change the arr (var:32bit)
+Mov2dArr MACRO arr,varX,varY,value
+	pushad
+	mov eax, w_N
+	mul varX
+	add eax, varY
+	mov [arr + eax], value
+	popad
+ENDM
+
+; get the arr (var:32bit)
+Get2dArr MACRO arr,varX,varY,dest
+	push edx
+	mov eax, w_N
+	mul varX
+	add eax, varY
+	mov dest, [arr + eax]
+	pop edx
+ENDM
+
+;==================== DATA =======================
 .data
-    hinitInstance DWORD ?
-    lpszinitCmdLine DWORD ?
-    
-    FPS DWORD 15
-    canvas db 640 DUP(' '), 0
-    head_pos_x1 DWORD 1
-    head_pos_y1 DWORD 1
-    head_pos_x2 DWORD 78
-    head_pos_y2 DWORD 78
-    length1 DWORD 3
-    length2 DWORD 3
-    direction1 DWORD 0
-    direction2 DWORD 0
-    dtmp1 DWORD 0
-    dtmp2 DWORD 0
 
-    g_hdc HDC 0
-    g_mdc HDC 0
-    g_bufdc HDC 0
-    g_hfoodBitmap HBITMAP 0
-    g_hsnake1Bitmap HBITMAP 0
-    g_hsnake2Bitmap HBITMAP 0
-    g_hwallBitmap HBITMAP 0
+ErrorTitle  BYTE "Error",0
+WindowName  BYTE "Greedy Snake",0
+className   BYTE "GSnake",0
+debug_num BYTE "%d", 10, 13, 0
+message1 BYTE "im alive", 10, 13, 0
 
-    g_output HANDLE 0
+;------------------------------------------------------------
+; Some Names
+foodAssetPath		BYTE "food.bmp", 0
+snake1AssetPath		BYTE "snake1.bmp", 0
+snake2AssetPath		BYTE "snake2.bmp", 0
+wallAssetPath		BYTE "wall.bmp", 0
 
-    player2wintxt db "Player2 win!", 0
-    player1wintxt db "Player1 win!", 0
-    drawtxt db "Draw!", 0
-    gameovertxt db "Game over", 0
-    
-    foodAssetsPos db "food.bmp", 0
-    snake1AssetsPos db "snake1.bmp", 0
-    snake2AssetsPos db "snake2.bmp", 0
-    wallAssetsPos db "wall.bmp", 0
+;------------------------------------------------------------
+; Game Config&State Global Vars
+w_WIDTH				DWORD 800
+w_N					DWORD 80
+FPS 				DWORD 15
+canvas 				BYTE 6400 DUP(?), 0	; 80x80=640?
 
+dtmp1				DWORD 0
+dtmp2				DWORD 0
+head_pos_x1 		DWORD 1
+head_pos_y1 		DWORD 1
+head_pos_x2 		DWORD 78
+head_pos_y2 		DWORD 78
+length1 			DWORD 3
+length2 			DWORD 3
+direction1 			DWORD 0
+direction2 			DWORD 0
+ii DWORD 0
+;------------------------------------------------------------
+; for test
+testmsg				BYTE "test", 10, 13, 0
+keyboardMsgFmt		BYTE "You have entered %c", 10, 13, 0
+
+;------------------------------------------------------------
+; WinProc Vars
+ps					PAINTSTRUCT <>
+
+;------------------------------------------------------------
+; GamePaint Vars
+g_hdc				HDC 0
+g_mdc				HDC 0
+g_bufdc				HDC 0
+
+g_hfoodBitmap		HBITMAP 0
+g_hsnake1Bitmap		HBITMAP 0
+g_hsnake2Bitmap		HBITMAP 0
+g_hwallBitmap		HBITMAP 0
+
+;------------------------------------------------------------
+
+msg	      MSGStruct <>
+winRect   RECT <>
+hMainWnd  DWORD ?
+hInstance DWORD ?
+
+; Define the Application's Window class structure.
+MainWin WNDCLASS <NULL,WinProc,NULL,NULL,NULL,NULL,NULL, \
+	COLOR_WINDOW,NULL,className>
+
+;=================== CODE =========================
 .code
+WinMain PROC
+; Get a handle to the current process.
+	INVOKE GetModuleHandle, NULL
+	mov hInstance, eax
+	mov MainWin.hInstance, eax
+
+; Load the program's icon and cursor.
+	INVOKE LoadIcon, NULL, IDI_APPLICATION
+	mov MainWin.hIcon, eax
+	INVOKE LoadCursor, NULL, IDC_ARROW
+	mov MainWin.hCursor, eax
+
+; Register the window class.
+	INVOKE RegisterClass, ADDR MainWin
+	.IF eax == 0
+	  call ErrorHandler
+	  jmp Exit_Program
+	.ENDIF
+
+; Create the application's main window.
+; Returns a handle to the main window in EAX.
+	INVOKE CreateWindowEx, 0, ADDR className,
+	  ADDR WindowName,MAIN_WINDOW_STYLE,
+	  CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,
+	  CW_USEDEFAULT,NULL,NULL,hInstance,NULL
+	mov hMainWnd,eax
+
+; If CreateWindowEx failed, display a message & exit.
+	.IF eax == 0
+	  call ErrorHandler
+	  jmp  Exit_Program
+	.ENDIF
+
+; Show and draw the window.
+	INVOKE ShowWindow, hMainWnd, SW_SHOW
+	INVOKE UpdateWindow, hMainWnd
+
+; Init the game
+	INVOKE GameInit, hMainWnd
+
+; Begin the program's message-handling loop.
+Message_Loop:
+	; Get next message from the queue.
+	INVOKE GetMessage, ADDR msg, NULL,NULL,NULL
+
+	; Quit if no more messages.
+	.IF eax == 0
+	  jmp Exit_Program
+	.ENDIF
+
+	; Translate the message
+	INVOKE TranslateMessage, ADDR msg
+	
+	; Relay the message to the program's WinProc.
+	INVOKE DispatchMessage, ADDR msg
+    jmp Message_Loop
+
+Exit_Program:
+	  INVOKE ExitProcess,0
+WinMain ENDP
+
+;-----------------------------------------------------
+WinProc PROC,
+	hWnd:DWORD, localMsg:DWORD, wParam:DWORD, lParam:DWORD
+; The application's message handler, which handles
+; application-specific messages. All other messages
+; are forwarded to the default Windows message
+; handler.
+;-----------------------------------------------------
+	mov eax, localMsg
+
+	.IF eax == WM_PAINT			; paint?
+		INVOKE BeginPaint, 		hWnd, ADDR ps
+		mov g_hdc, eax
+		INVOKE GamePaint, 		hWnd
+		INVOKE EndPaint, 		hWnd, ADDR ps
+		INVOKE ValidateRect, 	hWnd, 0
+		jmp WinProcExit
+	.ELSEIF eax == WM_CHAR			; key down?
+		; show which key pressed
+		pushad
+		INVOKE crt_printf, ADDR keyboardMsgFmt, wParam
+		popad
+		.IF wParam == 'w' || wParam == 'W' && direction1 == 2 || direction1 == 3
+			mov dtmp1, 0
+		.ELSEIF wParam == 'a' || wParam == 'A' && direction1 == 0 || direction1 == 1
+			mov dtmp1, 2
+		.ELSEIF wParam == 's' || wParam == 's' && direction1 == 2 || direction1 == 3
+			mov dtmp1, 1
+		.ELSEIF wParam == 'd' || wParam == 'D' && direction1 == 0 || direction1 == 1
+			mov dtmp1, 3
+		.ELSEIF wParam == 'i' || wParam == 'I' && direction2 == 2 || direction2 == 3
+			mov dtmp2, 0
+		.ELSEIF wParam == 'j' || wParam == 'J' && direction2 == 0 || direction2 == 1
+			mov dtmp2, 2
+		.ELSEIF wParam == 'k' || wParam == 'K' && direction2 == 2 || direction2 == 3
+			mov dtmp2, 1
+		.ELSEIF wParam == 'l' || wParam == 'L' && direction2 == 0 || direction2 == 1
+			mov dtmp2, 3
+		.ENDIF
+		INVOKE GamePaint, hWnd
+		jmp WinProcExit
+	.ELSEIF eax == WM_TIMER
+		INVOKE GamePaint, hWnd
+        xor eax, eax
+        ret
+	.ELSE		; other message?
+	  INVOKE DefWindowProc, hWnd, localMsg, wParam, lParam
+	  jmp WinProcExit
+	.ENDIF
+
+WinProcExit:
+	ret
+WinProc ENDP
+
+;---------------------------------------------------
+ErrorHandler PROC
+; Display the appropriate system error message.
+;---------------------------------------------------
+.data
+pErrorMsg  DWORD ?		; ptr to error message
+messageID  DWORD ?
+.code
+	INVOKE GetLastError	; Returns message ID in EAX
+	mov messageID,eax
+
+	; Get the corresponding message string.
+	INVOKE FormatMessage, FORMAT_MESSAGE_ALLOCATE_BUFFER + \
+	  FORMAT_MESSAGE_FROM_SYSTEM,NULL,messageID,NULL,
+	  ADDR pErrorMsg,NULL,NULL
+
+	; Display the error message.
+	INVOKE MessageBox,NULL, pErrorMsg, ADDR ErrorTitle,
+	  MB_ICONERROR+MB_OK
+
+	; Free the error message string.
+	INVOKE LocalFree, pErrorMsg
+	ret
+ErrorHandler ENDP
 
 lose PROC x :DWORD, y :DWORD
-    .IF (x >= 80) || (y >= N) || (x < 0) || (y < 0)
-        mov eax, 1
-        ret
-    .ENDIF
-    .IF (canvas[x * 80 + y] == '*') || (canvas[x * 80 + y] >= '@')
-        mov eax, 1
-        ret
-    .ENDIF
-    mov eax, 0
-    ret
-
+.IF (x >= 80) || (y >= N) || (x < 0) || (y < 0)
+	mov eax, 1
+	ret
+.ENDIF
+Get2dArr canvas, row, col, al
+.IF (al == '*') || (al >= '@')
+	mov eax, 1
+	ret
+.ENDIF
+mov eax, 0
+ret
 lose ENDP
 
 win PROC snakelength :DWORD
-
-    mov eax, 0
-    .IF snakelength >= 20
-        mov eax, 1
-    .ENDIF
-    ret
-    
+mov eax, 0
+.IF snakelength >= 20
+	mov eax, 1
+.ENDIF
+ret
 win ENDP
 
-snake_creep PROC hwnd :HWND
-    mov eax, dtmp1
-    mov direction1, eax
-    mov eax, dtmp2
-    mov direction2, eax
-    .IF direction1 == 0
-        dec head_pos_x1
-    .ELSEIF direction1 == 1
-        inc head_pos_x1
-    .ELSEIF direction1 == 2
-        dec head_pos_y1
-    .ELSEIF direction1 == 3
-        inc head_pos_y1
-    .ENDIF
+;----------------------------------------------------------
+SnakeCreep PROC,
+	hwnd :HWND
+; I know a bit about what it does and try to make it work.
+;----------------------------------------------------------
+mov eax, dtmp1
+mov direction1, eax
+mov eax, dtmp2
+mov direction2, eax
+.IF direction1 == 0
+	dec head_pos_x1
+.ELSEIF direction1 == 1
+	inc head_pos_x1
+.ELSEIF direction1 == 2
+	dec head_pos_y1
+.ELSEIF direction1 == 3
+	inc head_pos_y1
+.ENDIF
+.IF direction2 == 0
+	dec head_pos_x2
+.ELSEIF direction2 == 1
+	inc head_pos_x2
+.ELSEIF direction2 == 2
+	dec head_pos_y2
+.ELSEIF direction2 == 3
+	inc head_pos_y2
+.ENDIF
 
-    .IF direction2 == 0
-        dec head_pos_x2
-    .ELSEIF direction2 == 1
-        inc head_pos_x2
-    .ELSEIF direction2 == 2
-        dec head_pos_y2
-    .ELSEIF direction2 == 3
-        inc head_pos_y2
-    .ENDIF
+INVOKE lose, head_pos_x1, head_pos_y1
+.IF eax == 1
+	INVOKE GameClean, hwnd
+	INVOKE MessageBox, 0, offset player2wintxt,
+			gameovertxt, 0
+	INVOKE ExitProcess, 0
+.ENDIF
 
-    INVOKE lose, head_pos_x1, head_pos_y1
-    .IF eax == 1
-        INVOKE game_clean, hwnd
-        INVOKE MessageBox, 0, offset player2wintxt,
-                gameovertxt, 0
-        INVOKE ExitProcess, 0
-    .ENDIF
+INVOKE lose, head_pos_x2, head_pos_y2
+.IF eax == 1
+	INVOKE GameClean, hwnd
+	INVOKE MessageBox, 0, offset player1wintxt,
+			gameovertxt, 0
+	INVOKE ExitProcess, 0
+.ENDIF
 
-    INVOKE lose, head_pos_x2, head_pos_y2
-    .IF eax == 1
-        INVOKE game_clean, hwnd
-        INVOKE MessageBox, 0, offset player1wintxt,
-                gameovertxt, 0
-        INVOKE ExitProcess, 0
-    .ENDIF
+LOCAL i:DWORD
+LOCAL j:DWORD
+mov eax, 0
+mov i, eax
+mov j, eax
+LOCAL p:DWORD
+.WHILE i < 80
+	.WHILE j < 80
+		.IF i == head_pos_x1 && j == head_pos_y1
+			Get2dArr canvas, i, j, al
+			.IF al == '.'
+				inc length1
+				.WHILE 1
+					INVOKE rand
+					mov p, eax
+					.IF canvas[p] == ' '
+						mov canvas[p], '.'
+						.BREAK
+					.ENDIF
+				.ENDW
+			.ENDIF
+			Mov2dArr canvas, i, j, '@'
+		.ENDIF
+		.IF i == head_pos_x2 && j == head_pos_y2
+			Get2dArr canvas, i, j, al
+			.IF al == '.'
+				inc length2
+				.WHILE 1
+					INVOKE rand
+					mov p, eax
+					.IF canvas[p] == ' '
+						mov canvas[p], '.'
+						.BREAK
+					.ENDIF
+				.ENDW
+			.ENDIF
+			.IF al == '@'
+				INVOKE GameClean, hwnd
+				.IF length1 > length2
+					INVOKE MessageBox, 0, offset player1wintxt,
+							gameovertxt, 0
+				.ELSEIF length1 < length2
+					INVOKE MessageBox, 0, offset player1wintxt,
+							gameovertxt, 0
+				.ELSE
+					INVOKE MessageBox, 0, offset drawtxt,
+							gameovertxt, 0
+				.ENDIF
+				INVOKE ExitProcess, 0
+			.ENDIF
+			Mov2dArr canvas, i, j, '`'
+		.ENDIF
+		Get2dArr canvas, i, j, al
+		.IF al <= 'Z' && al >= '@'
+			inc al
+			sub al, '@'
+			.IF al > length1
+				Mov2dArr canvas, i, j, ' '
+			.ENDIF
+		.ENDIF
+		Get2dArr canvas, i, j, al
+		.IF al <= 'z' && al >= '`'
+			inc al
+			sub al, '`'
+			.IF al > length2
+				Mov2dArr canvas, i, j, ' '
+			.ENDIF
+		.ENDIF
+		inc j
+	.ENDW
+	inc i
+.ENDW
 
-    LOCAL i:DWORD
-    LOCAL j:DWORD
-    mov eax, 0
-    mov i, eax
-    mov j, eax
-    LOCAL p:DWORD
-    .WHILE i < 80
-        .WHILE j < 80
-            .IF i == head_pos_x1 && j == head_pos_y1
-                .IF canvas[i * 80 + j] == '.'
-                    inc length1
-                    .WHILE 1
-                        INVOKE rand
-                        mov p, eax
-                        .IF canvas[p] == ' '
-                            mov eax, '.'
-                            mov canvas[p], eax
-                            .BREAK
-                        .ENDIF
-                    .ENDW
-                .ENDIF
-                mov eax, '@'
-                mov canvas[i * 80 + j], eax
-            .ENDIF
-            .IF i == head_pos_x2 && j == head_pos_y2
-                .IF canvas[i * 80 + j] == '.'
-                    inc length2
-                    .WHILE 1
-                        INVOKE rand
-                        mov p, eax
-                        mov canvas[p], eax
-                        .BREAK
-                    .ENDW
-                .ENDIF
-                .IF canvas[i * 80 + j] == '@'
-                    INVOKE game_clean, hwnd
-                    .IF length1 > length2
-                        INVOKE MessageBox, 0, offset player1wintxt,
-                                gameovertxt, 0
-                    .ELSEIF length1 < length2
-                        INVOKE MessageBox, 0, offset player1wintxt,
-                                gameovertxt, 0
-                    .ELSE
-                        INVOKE MessageBox, 0, offset drawtxt,
-                                gameovertxt, 0
-                    .ENDIF
-                    INVOKE ExitProcess, 0
-                .ENDIF
-                mov eax, '`'
-                mov canvas[i * 80 + j], eax
-            .ENDIF
-            .IF canvas[i * 80 + j] <= 'Z' && canvas[i * 80 + j] >= '@'
-                inc canvas[i * 80 + j]
-                .IF canvas[i * 80 + j] - '@' > length1
-                    mov eax, ' '
-                    mov canvas[i * 80 + j], eax
-                .ENDIF
-            .ENDIF
-            .IF canvas[i * 80 + j] <= 'z' && canvas[i * 80 + j] >= '`'
-                inc canvas[i * 80 + j]
-                .IF canvas[i * 80 + j] - '`' > length2
-                    mov eax, ' '
-                    mov canvas[i * 80 + j], eax
-                .ENDIF
-            .ENDIF
-            inc j
-        .ENDW
-        inc i
-    .ENDW
+INVOKE win, length1
+.IF eax
+	INVOKE GameClean, hwnd
+	INVOKE MessageBox, 0, offset player1wintxt,
+			gameovertxt, 0
+	INVOKE ExitProcess, 0
+.ENDIF
+INVOKE win, length2
+.IF eax
+	INVOKE GameClean, hwnd
+	INVOKE MessageBox, 0, offset player2wintxt,
+			gameovertxt, 0
+	INVOKE ExitProcess, 0
+.ENDIF
 
-    INVOKE win, length1
-    .IF eax
-        INVOKE game_clean, hwnd
-        INVOKE MessageBox, 0, offset player1wintxt,
-                gameovertxt, 0
-        INVOKE ExitProcess, 0
-    .ENDIF
-    INVOKE win, length2
-    .IF eax
-        INVOKE game_clean, hwnd
-        INVOKE MessageBox, 0, offset player2wintxt,
-                gameovertxt, 0
-        INVOKE ExitProcess, 0
-    .ENDIF
+SnakeCreep ENDP
 
-snake_creep ENDP
-
-game_paint PROC hwnd : HWND
-    INVOKE GetDC, hwnd
-    mov g_hdc, eax
-
-    xor edi, edi
-    xor esi, esi
-    local i DWORD 0
-    local j DWORD 0
-
-    .WHILE i < 80
-        .WHILE j < 80
-            mov edi, i
-            mov esi, j
-            mov cx, canvas[esi + edi * 80]
-            .IF cx == 46
-                push edi
-                push esi
-                push ecx 
-                INVOKE SelectObject, g_bufdc, g_hfoodBitmap
-                INVOKE BitBlt, g_mdc, 10*j, 10*i,  10, 10, g_bufdc, 0, 0, SRCCOPY
-                pop ecx
-                pop esi
-                pop edi
-            .ELSEIF cx == 42
-                push edi
-                push esi
-                push ecx 
-                INVOKE SelectObject, g_bufdc, g_hwallBitmap
-                INVOKE BitBlt, g_mdc, 10*j, 10*i,  10, 10, g_bufdc, 0, 0, SRCCOPY
-                pop ecx
-                pop esi
-                pop edi
-            .ELSEIF cx >= 41 && cx <= 90
-                push edi
-                push esi
-                push ecx 
-                INVOKE SelectObject, g_bufdc, g_hsnake1Bitmap
-                INVOKE BitBlt, g_mdc, 10*j, 10*i,  10, 10, g_bufdc, 0, 0, SRCCOPY
-                pop ecx
-                pop esi
-                pop edi                
-            .ELSEIF cx >= 61 && cx <= 122
-                push edi
-                push esi
-                push ecx 
-                INVOKE SelectObject, g_bufdc, g_hsnake2Bitmap
-                INVOKE BitBlt, g_mdc, 10*j, 10*i,  10, 10, g_bufdc, 0, 0, SRCCOPY
-                pop ecx
-                pop esi
-                pop edi
-            .ENDIF
-        .ENDW
-    .ENDW
-
-    INVOKE BitBlt, g_hdc, 0, 0, 800, 800, g_mdc, 0, 0, SRCCOPY
-
-    INVOKE ReleaseDC, hwnd, g_hdc
-game_paint ENDP
-
-game_init PROC hwnd :HWND
-    local i DWORD 0
-    local j DWORD 0
-    mov i, 80
-
-    .WHILE i < 80
-        .WHILE j < 80
-            mov cx, 32
-            mov [j + 80*i], cx
-            .IF i == 0 || i == 79 || j == 0 || j == 79
-                mov cx, 42
-                mov [j + 80*i], cx
-            .ENDIF
-        .ENDW
-    .ENDW
-
-    local dtmp1 DWORD 1
-    mov canvas[head_pos_y1 + head_pos_x1 * 80], 'A'
-    mov canvas[head_pos_y2 + head_pos_x2 * 80], 'a'
-
-    INVOKE time, 0
-    INVOKE srand, eax
-
-    .WHILE 1
-        local p :DWORD
-        mov p, 0
-
-        INVOKE rand
-        div 640
-        mov p, ah
-
-        local row :DWORD
-        local col :DWORD
-        mov row, 0
-        mov col, 0
-
-        mov ax, p
-        div 80
-        mov row, al
-        mov col, ah
-
-        .IF canvas[ah + al*80] == 32
-            mov canvas[ah + al*80], 46
-            .BREAK
-        .ENDIF
-    .ENDW
-    
-    INVOKE GetDC, hwnd
-    mov g_hdc, eax
-
-    INVOKE LoadImage, NULL, offset foodAssetsPos, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
-    mov g_hfoodBitmap, eax
-    ; PTR eax maybe?
-
-    INVOKE LoadImage, NULL, offset foodAssetsPos, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
-    mov g_hsnake1Bitmap, eax
-
-    INVOKE LoadImage, NULL, offset foodAssetsPos, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
-    mov g_hsnake2Bitmap, eax
-
-    INVOKE LoadImage, NULL, offset foodAssetsPos, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
-    mov g_hwallBitmap, eax
-
-    INVOKE CreateCompatibleDC, g_hdc
-    mov g_mdc, eax
-
-    INVOKE CreateCompatibleDC, g_hdc
-    mov g_bufdc, eax    
-
-    INVOKE ReleaseDC, hwnd, g_hdc
-
-    INVOKE SetTimer, hwnd, 1, 100, NULL
-
-    INVOKE game_paint, hwnd 
-
-game_init ENDP
-
-game_clean PROC hwnd :HWND
+GameClean PROC hwnd :HWND
     INVOKE KillTimer, hwnd, 1
     INVOKE DeleteObject, g_hsnake1Bitmap
     INVOKE DeleteObject, g_hfoodBitmap
     INVOKE DeleteDC, g_mdc
     INVOKE DeleteDC, g_bufdc
-game_clean ENDP
+GameClean ENDP
+
+;----------------------------------------------------------
+GamePaint PROC,
+	hwnd :HWND
+; I dont know what it really does. I try to make it work.
+;----------------------------------------------------------
+LOCAL bmp	:HBITMAP
+LOCAL i		:DWORD
+LOCAL j 	:DWORD
+LOCAL widthDivN	:DWORD
+LOCAL loopN		:DWORD
+
+	;INVOKE crt_printf, offset canvas
+
+	INVOKE GetDC, hwnd
+	mov g_hdc, eax
+
+	INVOKE CreateCompatibleBitmap, g_hdc, w_WIDTH, w_WIDTH
+	mov bmp, eax
+	
+	INVOKE SelectObject, g_mdc, bmp
+	
+	xor esi, esi
+	xor edi, edi
+
+	mov i, 0
+	mov j, 0
+
+	; calc width / N
+	mov eax, w_WIDTH
+	div BYTE PTR w_N
+	movzx ebx, al
+	mov widthDivN, ebx
+
+	;-------------------------------------------
+	; I havent checked this WHILE block 
+	; I just solved some errors like "A2026 constant expected"
+	;
+	.WHILE i < 80
+		mov j, 0
+        .WHILE j < 80
+            mov edi, i
+            mov esi, j
+
+			mov eax, w_N
+			mul edi
+			add eax, esi
+			mov cl, [canvas + eax]
+            
+            .IF cl == 46
+                pushad
+                INVOKE SelectObject, g_bufdc, g_hfoodBitmap
+				;--------------------------------------
+				; calculate (WIDTH)/N*i and (WIDTH)/N*j
+				mov eax, widthDivN
+				mul i
+				mov ebx, eax 	; (WIDTH)/N*i
+				mov eax, widthDivN
+				mul j			; (WIDTH)/N*j
+				;--------------------------------------
+                INVOKE BitBlt, g_mdc, eax, ebx, widthDivN, widthDivN, g_bufdc, 0, 0, SRCCOPY
+                popad
+            .ELSEIF cl == 42
+                pushad
+                INVOKE SelectObject, g_bufdc, g_hwallBitmap
+				mov eax, widthDivN
+				mul i
+				mov ebx, eax 	; (WIDTH)/N*i
+				mov eax, widthDivN
+				mul j			; (WIDTH)/N*j
+                INVOKE BitBlt, g_mdc, eax, ebx, widthDivN, widthDivN, g_bufdc, 0, 0, SRCCOPY
+				popad
+            .ELSEIF cl >= 41h && cl <= 90
+                pushad
+                INVOKE SelectObject, g_bufdc, g_hsnake1Bitmap
+				mov eax, widthDivN
+				mul i
+				mov ebx, eax 	; (WIDTH)/N*i
+				mov eax, widthDivN
+				mul j			; (WIDTH)/N*j
+                INVOKE BitBlt, g_mdc, eax, ebx, widthDivN, widthDivN, g_bufdc, 0, 0, SRCCOPY
+                popad              
+            .ELSEIF cl >= 61h && cl <= 122
+                pushad
+                INVOKE SelectObject, g_bufdc, g_hsnake2Bitmap
+				mov eax, widthDivN
+				mul i
+				mov ebx, eax 	; (WIDTH)/N*i
+				mov eax, widthDivN
+				mul j			; (WIDTH)/N*j
+                INVOKE BitBlt, g_mdc, eax, ebx, widthDivN, widthDivN, g_bufdc, 0, 0, SRCCOPY
+                popad
+            .ENDIF
+			inc j
+        .ENDW
+		inc i
+    .ENDW
+	;
+	;------------------------------------------
+
+	INVOKE BitBlt, g_hdc, 0, 0, w_WIDTH, w_WIDTH, g_mdc, 0, 0, SRCCOPY
+    INVOKE ReleaseDC, hwnd, g_hdc
+	RET
+GamePaint ENDP
+
+;----------------------------------------------------------
+GameInit PROC,
+	hwnd :HWND
+; I dont know what it really does. I just try to make it work.
+;----------------------------------------------------------
+LOCAL i		:DWORD
+LOCAL j		:DWORD
+local p 	:DWORD
+local row 	:DWORD
+local col 	:DWORD
+LOCAL widthDivN	:DWORD
+
+	mov i, 0
+	.WHILE i < 80
+		mov j, 0
+        .WHILE j < 80
+			pushad
+			Mov2dArr canvas, i, j, ' '
+            .IF i == 0 || i == 79 || j == 0 || j == 79
+                mov bl, 42
+				Mov2dArr canvas, i, j, '*'
+            .ENDIF
+			popad
+			inc j
+        .ENDW
+		inc i
+    .ENDW
 
 
-start:
-    INVOKE GetModuleHandle, NULL
-    mov hinitInstance, eax
 
-    INVOKE GetCommandLine
-    mov lpszinitCmdLine, eax
+	pushad
+	; set initial directions and positions
+	mov dtmp1, 1
+	Mov2dArr canvas, head_pos_x1, head_pos_y1, 'A'
+	Mov2dArr canvas, head_pos_x2, head_pos_y2, 'a'
 
-    INVOKE WinMain, hinitInstance, NULL, lpszinitCmdLine, SW_SHOWDEFAULT
-    INVOKE ExitProcess, eax
+	.WHILE 1
+        mov p, 0
 
+		mov eax, w_N
+		mul w_N
+		mov ebx, eax	; N^2 in ebx
 
-WinMain PROC hInstance :DWORD,
-             hPrevInst :DWORD,
-             szCmdLine :DWORD,
-             nShowCmd :DWORD
+        INVOKE crt_rand
 
-    szText szClassName, "GreedySnake"
-
-    local wc :WNDCLASSEX
-    local hwnd :HWND
-
-    mov wc.lpfnWndProc, WndProc
-    push hInstance
-    pop wc.hInstance
-    mov wc.lpszClassName, offset szClassName
-
-    invoke LoadCursor, hInstance, IDC_ARROW
-	mov	wc.hCursor, eax
-
-    INVOKE RegisterClassEx, ADDR wc
-
-    szText szWindowTitle, "Greedy Snake"
-    INVOKE CreateWindowEx, 0, ADDR szClassName,
-        ADDR szWindowTitle, WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-        NULL, NULL, hInstance, NULL
-    
-    .IF eax == 0
-        jmp Exit_Program
-    .ENDIF
-
-
-    mov hwnd, eax
-    INVOKE ShowWindow, hwnd, nShowCmd
-    local msg :MSG
-
-
-Message_Loop:
-    INVOKE GetMessage, ADDR msg, NULL, NULL, NULL
-    .IF eax == 0
-        jmp Exit_Program
-    .ENDIF
-
-    INVOKE TranslateMessage, ADDR msg
-    INVOKE DispatchMessage, ADDR msg
-
-    jmp Message_Loop
-
-Exit_Program:
-    INVOKE ExitProcess, 0
-
-WinMain ENDP
-
-
-WndProc PROC,
-    hwnd:DWORD, uMsg:DWORD, 
-    wParam:DWORD, lParam:DWORD
-
-    .IF uMsg == WM_DESTROY
-        INVOKE PostQuitMessage, 0
-
-        xor eax, eax
-        ret
-    .ELSEIF uMsg == WM_PAINT
-        local ps : PAINTSTRUCT
-        INVOKE BeginPaint, hwnd, addr ps
-        INVOKE game_paint, hwnd
-        INVOKE EndPaint, hwnd, addr ps
-        INVOKE ValidateRect, hwnd, NULL
+		mov edx, 0
+        div ebx
+        mov p, edx
         
-        xor eax, eax
-        ret
-    .ELSEIF uMsg == WM_CHAR
-        .IF wParam == 'W' || wParam == 'w'
-            .IF direction1 == 2 || direction1 == 3
-                mov eax, 0
-                mov direction1, eax
-            .ENDIF
-        .ELSEIF wParam == 'S' || wParam == 's'
-            .IF direction1 == 2 || direction1 == 3
-                mov eax, 1
-                mov direction1, eax
-            .ENDIF
-        .ELSEIF wParam == 'A' || wParam == 'a'
-            .IF direction1 == 0 || direction1 == 1
-                mov eax, 2
-                mov direction1, eax
-            .ENDIF
-        .ELSEIF wParam == 'D' || wParam == 'd'
-            .IF direction1 == 0 || direction1 == 1
-                mov eax, 3
-                mov direction1, eax
-            .ENDIF
-        .ELSEIF wParam == 'I' || wParam == 'i'
-            .IF direction2 == 2 || direction2 == 3
-                mov eax, 0
-                mov direction2, eax
-            .ENDIF
-        .ELSEIF wParam == 'K' || wParam == 'k'
-            .IF direction2 == 2 || direction2 == 3
-                mov eax, 1
-                mov direction2, eax
-            .ENDIF
-        .ELSEIF wParam == 'J' || wParam == 'j'
-            .IF direction2 == 0 || direction2 == 1
-                mov eax, 2
-                mov direction2, eax
-            .ENDIF
-        .ELSEIF wParam == 'L' || wParam == 'l'
-            .IF direction2 == 0 || direction2 == 1
-                mov eax, 3
-                mov direction2, eax
-            .ENDIF
+        mov row, 0
+        mov col, 0
+
+        mov ax, WORD PTR p
+		mov bl, BYTE PTR w_N
+        div bl
+        mov BYTE PTR row, al
+        mov BYTE PTR col, ah
+
+		
+
+		Get2dArr canvas, row, col, al
+		
+        .IF al == ' '
+			Mov2dArr canvas, row, col, '.'
+            .BREAK
         .ENDIF
-        INVOKE game_paint, hwnd
-        xor eax, eax
-        ret
-    .ELSEIF uMsg == WM_TIMER
-        INVOKE snake_creep, hwnd
-        INVOKE game_paint, hwnd
-        xor eax, eax
-        ret
-    .ENDIF
+    .ENDW
+	
+	INVOKE GetDC, hwnd
+	mov g_hdc, eax
+	
+	; calc width / N 
+	mov eax, w_WIDTH
+	div BYTE PTR w_N
+	movzx ebx, al
+	mov widthDivN, ebx
 
-    INVOKE DefWindowProc, hwnd, uMsg, wParam, lParam
+	popad
+	
+	; g_hfoodBitmap
+	INVOKE LoadImage, NULL, ADDR foodAssetPath, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
+	mov g_hfoodBitmap, HBITMAP ptr eax
 
-WinProcExit:
-    ret    
+	; g_hsnake1Bitmap
+	INVOKE LoadImage, NULL, ADDR snake1AssetPath, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
+	mov g_hsnake1Bitmap,HBITMAP ptr eax
 
-WndProc ENDP
+	INVOKE LoadImage, NULL, ADDR snake2AssetPath, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
+	mov g_hsnake2Bitmap,HBITMAP ptr eax
 
-END start
+	INVOKE LoadImage, NULL, ADDR wallAssetPath, IMAGE_BITMAP, 10, 10, LR_LOADFROMFILE
+	mov g_hwallBitmap,HBITMAP ptr eax
+
+	INVOKE CreateCompatibleDC, g_hdc
+	mov g_mdc, eax
+	INVOKE CreateCompatibleDC, g_hdc
+	mov g_bufdc, eax
+	INVOKE ReleaseDC, hwnd, g_hdc
+
+	mov eax, 1000
+	mov ebx, FPS
+	div ebx
+	INVOKE SetTimer, hwnd, 1, eax, 0
+
+	INVOKE GamePaint, hwnd
+
+	RET
+GameInit ENDP
+
+
+END WinMain
