@@ -377,16 +377,16 @@ local col 	:DWORD
 	INVOKE lose, head_pos_x1, head_pos_y1
 	.IF eax == 1
 		INVOKE GameClean, hwnd
-		INVOKE MessageBox, 0, offset player2wintxt,
-				gameovertxt, 0
+		INVOKE MessageBox, hwnd, offset player2wintxt,
+				offset gameovertxt, MB_OK
 		INVOKE ExitProcess, 0
 	.ENDIF
 
 	INVOKE lose, head_pos_x2, head_pos_y2
 	.IF eax == 1
 		INVOKE GameClean, hwnd
-		INVOKE MessageBox, 0, offset player1wintxt,
-				gameovertxt, 0
+		INVOKE MessageBox, hwnd, offset player1wintxt,
+				offset gameovertxt, MB_OK
 		INVOKE ExitProcess, 0
 	.ENDIF
 
@@ -476,14 +476,14 @@ local col 	:DWORD
 					INVOKE GameClean, hwnd
 					mov edx, length2
 					.IF length1 > edx
-						INVOKE MessageBox, 0, offset player1wintxt,
-								gameovertxt, 0
+						INVOKE MessageBox, hwnd, offset player1wintxt,
+								offset gameovertxt, 0
 					.ELSEIF length1 < edx
-						INVOKE MessageBox, 0, offset player1wintxt,
-								gameovertxt, 0
+						INVOKE MessageBox, hwnd, offset player1wintxt,
+								offset gameovertxt, 0
 					.ELSE
-						INVOKE MessageBox, 0, offset drawtxt,
-								gameovertxt, 0
+						INVOKE MessageBox, hwnd, offset drawtxt,
+								offset gameovertxt, 0
 					.ENDIF
 					INVOKE ExitProcess, 0
 				.ENDIF
@@ -518,15 +518,15 @@ local col 	:DWORD
 	INVOKE win, length1
 	.IF eax
 		INVOKE GameClean, hwnd
-		INVOKE MessageBox, 0, offset player1wintxt,
-				gameovertxt, 0
+		INVOKE MessageBox, hwnd, offset player1wintxt,
+				offset gameovertxt, 0
 		INVOKE ExitProcess, 0
 	.ENDIF
 	INVOKE win, length2
 	.IF eax
 		INVOKE GameClean, hwnd
-		INVOKE MessageBox, 0, offset player2wintxt,
-				gameovertxt, 0
+		INVOKE MessageBox, hwnd, offset player2wintxt,
+				offset gameovertxt, 0
 		INVOKE ExitProcess, 0
 	.ENDIF
 
@@ -540,6 +540,7 @@ GameClean PROC hwnd :HWND
     INVOKE DeleteObject, g_hfoodBitmap
     INVOKE DeleteDC, g_mdc
     INVOKE DeleteDC, g_bufdc
+	ret
 GameClean ENDP
 
 ;----------------------------------------------------------
