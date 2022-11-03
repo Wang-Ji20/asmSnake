@@ -116,7 +116,8 @@ length1 			DWORD 3
 length2 			DWORD 3
 direction1 			DWORD 0
 direction2 			DWORD 0
-ii DWORD 0
+init_foodnum		DWORD 8
+
 ;------------------------------------------------------------
 ; for test
 testmsg				BYTE "test", 10, 13, 0
@@ -652,12 +653,13 @@ GameInit PROC,
 	hwnd :HWND
 ; I dont know what it really does. I just try to make it work.
 ;----------------------------------------------------------
-LOCAL i		:DWORD
-LOCAL j		:DWORD
-local p 	:DWORD
-local row 	:DWORD
-local col 	:DWORD
+LOCAL i			:DWORD
+LOCAL j			:DWORD
+local p 		:DWORD
+local row 		:DWORD
+local col 		:DWORD
 LOCAL widthDivN	:DWORD
+local food		:DWORD
 
 	mov i, 0
 	.WHILE i < 80
@@ -682,37 +684,41 @@ LOCAL widthDivN	:DWORD
 	mov dtmp1, 1
 	Mov2dArr canvas, head_pos_x1, head_pos_y1, 'A'
 	Mov2dArr canvas, head_pos_x2, head_pos_y2, 'a'
-	.WHILE 1
-        mov p, 0
+	
+	; Reject Sampling
+	mov food, 0
+	.WHILE food < 8
+		.WHILE 1
+			mov p, 0
 
-		mov eax, w_N
-		mul w_N
-		mov ebx, eax	; N^2 in ebx
+			mov eax, w_N
+			mul w_N
+			mov ebx, eax	; N^2 in ebx
 
-        INVOKE crt_rand
+			INVOKE crt_rand
 
-		mov edx, 0
-        div ebx
-        mov p, edx
-        
-        mov row, 0
-        mov col, 0
+			mov edx, 0
+			div ebx
+			mov p, edx
+			
+			mov row, 0
+			mov col, 0
 
-        mov ax, WORD PTR p
-		mov bl, BYTE PTR w_N
-        div bl
-        mov BYTE PTR row, al
-        mov BYTE PTR col, ah
+			mov ax, WORD PTR p
+			mov bl, BYTE PTR w_N
+			div bl
+			mov BYTE PTR row, al
+			mov BYTE PTR col, ah
 
-		
-
-		Get2dArr canvas, row, col, al
-		
-        .IF al == ' '
-			Mov2dArr canvas, row, col, '.'
-            .BREAK
-        .ENDIF
-    .ENDW
+			Get2dArr canvas, row, col, al
+			
+			.IF al == ' '
+				Mov2dArr canvas, row, col, '.'
+				.BREAK
+			.ENDIF
+		.ENDW
+		inc food
+	.ENDW
 	
 	INVOKE GetDC, hwnd
 	mov g_hdc, eax
