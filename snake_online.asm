@@ -128,7 +128,8 @@ init_foodnum		DWORD 8
 testmsg				BYTE "test", 10, 13, 0
 keyboardMsgFmt		BYTE "You have entered %c", 10, 13, 0
 charmsg             BYTE "%c ", 0
-intmsg             BYTE "%d ", 0
+intmsg             	BYTE "%d ", 0
+strmsg				BYTE "%s ", 0
 endl                BYTE 10, 13, 0
 
 ;------------------------------------------------------------
@@ -165,6 +166,8 @@ recvBufLength		DWORD 7000
 ;send_operation
 sendMessage			BYTE "%d_0_%d_%d", 0
 sendGetCanvas		BYTE "%d_1", 0
+pl					DWORD 0
+dir					DWORD 0
 
 msg	      MSGStruct <>
 winRect   RECT <>
@@ -175,6 +178,11 @@ hInstance DWORD ?
 ; WinMain Vars
 usageMessage		BYTE "usage: snake_online.exe server_ip server_port listen_port", 10, 13, 0
 pauseMessage		BYTE "pause", 0
+scanFormat			BYTE "%s %s %s", 0
+opt1				BYTE 32 DUP(0), 0
+opt2				BYTE 32 DUP(0), 0
+opt3				BYTE 32 DUP(0), 0
+
 
 ; Define the Application's Window class structure.
 MainWin WNDCLASS <NULL,WinProc,NULL,NULL,NULL,NULL,NULL, \
@@ -185,6 +193,16 @@ MainWin WNDCLASS <NULL,WinProc,NULL,NULL,NULL,NULL,NULL, \
 WinMain PROC
 	LOCAL argc	:DWORD
 	LOCAL lpszArgv	:LPWSTR
+
+; Get args
+	INVOKE crt_scanf, ADDR scanFormat, ADDR opt1, ADDR opt2, ADDR opt3
+	;INVOKE crt_printf, ADDR scanFormat, ADDR opt1, ADDR opt2, ADDR opt3
+	INVOKE crt_memcpy, ADDR RECEIVERADDR, ADDR opt1, 32
+	INVOKE crt_atoi, ADDR opt2
+	MOV RECEIVERPORT, ax
+	INVOKE crt_atoi, ADDR opt3
+	MOV LISTENPORT, ax
+
 
 ; Get a handle to the current process.
 	INVOKE GetModuleHandle, NULL
@@ -272,27 +290,43 @@ WinProc PROC,
 		pushad
 		INVOKE crt_printf, ADDR keyboardMsgFmt, wParam
 		popad
-		.IF (wParam == 'w' || wParam == 'W') && (direction1 == 2 || direction1 == 3)
-			mov dtmp1, 0
-		.ELSEIF (wParam == 'a' || wParam == 'A') && (direction1 == 0 || direction1 == 1)
-			mov dtmp1, 2
-		.ELSEIF (wParam == 's' || wParam == 'S') && (direction1 == 2 || direction1 == 3)
-			mov dtmp1, 1
-		.ELSEIF (wParam == 'd' || wParam == 'D') && (direction1 == 0 || direction1 == 1)
-			mov dtmp1, 3
-		.ELSEIF (wParam == 'i' || wParam == 'I') && (direction2 == 2 || direction2 == 3)
-			mov dtmp2, 0
-		.ELSEIF (wParam == 'j' || wParam == 'J') && (direction2 == 0 || direction2 == 1)
-			mov dtmp2, 2
-		.ELSEIF (wParam == 'k' || wParam == 'K') && (direction2 == 2 || direction2 == 3)
-			mov dtmp2, 1
-		.ELSEIF (wParam == 'l' || wParam == 'L') && (direction2 == 0 || direction2 == 1)
-			mov dtmp2, 3
+		.IF (wParam == 'w' || wParam == 'W')
+			MOV pl, 1
+			MOV dir, 0
+			INVOKE SendOperation, pl, dir
+		.ELSEIF (wParam == 'a' || wParam == 'A')
+			MOV pl, 1
+			MOV dir, 2
+			INVOKE SendOperation, pl, dir
+		.ELSEIF (wParam == 's' || wParam == 'S')
+			MOV pl, 1
+			MOV dir, 1
+			INVOKE SendOperation, pl, dir
+		.ELSEIF (wParam == 'd' || wParam == 'D')
+			MOV pl, 1
+			MOV dir, 3
+			INVOKE SendOperation, pl, dir
+		.ELSEIF (wParam == 'i' || wParam == 'I')
+			MOV pl, 2
+			MOV dir, 0
+			INVOKE SendOperation, pl, dir
+		.ELSEIF (wParam == 'j' || wParam == 'J')
+			MOV pl, 2
+			MOV dir, 2
+			INVOKE SendOperation, pl, dir
+		.ELSEIF (wParam == 'k' || wParam == 'K')
+			MOV pl, 2
+			MOV dir, 1
+			INVOKE SendOperation, pl, dir
+		.ELSEIF (wParam == 'l' || wParam == 'L')
+			MOV pl, 2
+			MOV dir, 3
+			INVOKE SendOperation, pl, dir
 		.ENDIF
 		INVOKE GamePaint, hWnd
 		jmp WinProcExit
 	.ELSEIF eax == WM_TIMER
-
+		INVOKE GetCanvas
 		INVOKE GamePaint, hWnd
         xor eax, eax
         ret
@@ -332,7 +366,7 @@ ErrorHandler ENDP
 
 ;---------------------------------------------------
 InitRecvSocket PROC,
-	port :WORD
+	port:WORD
 ;---------------------------------------------------
 	LOCAL iRes	:DWORD
 
@@ -378,6 +412,7 @@ InitSendSocket PROC
 
 	INVOKE socket, AF_INET, SOCK_DGRAM, IPPROTO_UDP
 	MOV sendSocket, eax
+	;INVOKE crt_printf, ADDR intmsg, sendSocket
 
 send_init_err:
 
@@ -386,7 +421,7 @@ InitSendSocket ENDP
 
 ;------------------------------------------------
 SendOperation PROC,
-	player :DWORD, direction :DWORD
+	player:DWORD, direction:DWORD
 ;------------------------------------------------
 	LOCAL receiverAddr	:sockaddr_in
 	LOCAL iRes			:DWORD
@@ -401,10 +436,15 @@ SendOperation PROC,
 	INVOKE htons, RECEIVERPORT
 	MOV receiverAddr.sin_port, ax
 	MOV receiverAddr.sin_family, AF_INET
-	INVOKE inet_addr, RECEIVERADDR
+	INVOKE inet_addr, ADDR RECEIVERADDR
 	MOV receiverAddr.sin_addr.S_un.S_addr, eax
 
-	INVOKE crt_sprintf, ADDR sendBuf, ADDR sendMessage, LISTENPORT, player, direction
+	INVOKE crt_printf, ADDR intmsg, pl
+	INVOKE crt_printf, ADDR intmsg, dir
+
+	INVOKE crt_sprintf, ADDR sendBuf, ADDR sendMessage, LISTENPORT, pl, dir
+	INVOKE crt_printf, ADDR strmsg, ADDR sendBuf
+	
 
 	INVOKE sendto, sendSocket, ADDR sendBuf, sendBufLength, 0, ADDR receiverAddr, 16
 
@@ -424,12 +464,16 @@ GetCanvas PROC
 	INVOKE htons, RECEIVERPORT
 	MOV receiverAddr.sin_port, ax
 	MOV receiverAddr.sin_family, AF_INET
-	INVOKE inet_addr, RECEIVERADDR
+	INVOKE inet_addr, ADDR RECEIVERADDR
 	MOV receiverAddr.sin_addr.S_un.S_addr, eax
 
+	
 	INVOKE crt_sprintf, ADDR sendBuf, ADDR sendGetCanvas, LISTENPORT
 
 	INVOKE sendto, sendSocket, ADDR sendBuf, sendBufLength, 0, ADDR receiverAddr, 16
+	;INVOKE WSAGetLastError
+	;MOV iRes, eax
+	;INVOKE crt_printf, ADDR intmsg, iRes
 
 	INVOKE recvfrom, recvSocket, ADDR recvBuf, recvBufLength, 0, 0, 0
 	MOV iRes, eax
