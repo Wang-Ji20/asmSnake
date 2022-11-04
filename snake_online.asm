@@ -155,11 +155,12 @@ sendSocket			SOCKET  0
 myAddr				sockaddr_in	<>
 iTimeout			DWORD 0
 LISTENPORT			WORD 0
+LISTENPORTDWORD		DWORD 0
 RECEIVERPORT		WORD 0
 RECEIVERADDR		BYTE 32 DUP(0), 0
 
-sendBuf				BYTE 32 DUP(0), 0
-sendBufLength		DWORD 32
+sendBuf				BYTE 320 DUP(0), 0
+sendBufLength		DWORD 320
 recvBuf				BYTE 7000 DUP(0), 0
 recvBufLength		DWORD 7000
 
@@ -426,7 +427,7 @@ SendOperation PROC,
 	LOCAL receiverAddr	:sockaddr_in
 	LOCAL iRes			:DWORD
 	
-	INVOKE crt_memset, ADDR sendBuf, 0, 32
+	INVOKE crt_memset, ADDR sendBuf, 0, 320
 	INVOKE crt_memset, ADDR receiverAddr, 0, 16
 
 	;receiverAddr.sin_port = htons(RECEIVERPORT);
@@ -439,12 +440,23 @@ SendOperation PROC,
 	INVOKE inet_addr, ADDR RECEIVERADDR
 	MOV receiverAddr.sin_addr.S_un.S_addr, eax
 
+	xchg eax, ebx
+	xchg ebx, eax
+
 	INVOKE crt_printf, ADDR intmsg, pl
 	INVOKE crt_printf, ADDR intmsg, dir
 
-	INVOKE crt_sprintf, ADDR sendBuf, ADDR sendMessage, LISTENPORT, pl, dir
+	push eax
+	xor eax, eax
+	mov ax, LISTENPORT
+	mov LISTENPORTDWORD, eax
+	pop eax
+
+	INVOKE crt_sprintf, ADDR sendBuf, ADDR sendMessage, LISTENPORTDWORD, pl, dir
 	INVOKE crt_printf, ADDR strmsg, ADDR sendBuf
-	
+
+	xchg eax, ebx
+	xchg ebx, eax
 
 	INVOKE sendto, sendSocket, ADDR sendBuf, sendBufLength, 0, ADDR receiverAddr, 16
 
@@ -457,7 +469,7 @@ GetCanvas PROC
 	LOCAL receiverAddr	:sockaddr_in
 	LOCAL iRes			:DWORD
 
-	INVOKE crt_memset, ADDR sendBuf, 0, 32
+	INVOKE crt_memset, ADDR sendBuf, 0, 320
 	INVOKE crt_memset, ADDR recvBuf, 0, 7000
 	INVOKE crt_memset, ADDR receiverAddr, 0, 16
 
