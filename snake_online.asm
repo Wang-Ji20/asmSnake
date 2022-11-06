@@ -57,8 +57,8 @@ win 		PROTO :DWORD
 lose 		PROTO :DWORD, :DWORD
 InitRecvSocket		PROTO :WORD
 InitSendSocket		PROTO
-SendOperation		PROTO :DWORD, :DWORD
-GetCanvas			PROTO
+SendOperation		PROTO
+GetCanvas			PROTO :HWND
 ;-----------------------;
 ; My Macro Declarations ;
 ;-----------------------;
@@ -159,13 +159,20 @@ LISTENPORTDWORD		DWORD 0
 RECEIVERPORT		WORD 0
 RECEIVERADDR		BYTE 32 DUP(0), 0
 
-sendBuf				BYTE 320 DUP(0), 0
-sendBufLength		DWORD 320
+sendBuf				BYTE 128 DUP(0), 0
+sendBufLength		DWORD 128
 recvBuf				BYTE 7000 DUP(0), 0
 recvBufLength		DWORD 7000
 
 ;send_operation
-sendMessage			BYTE "%d_0_%d_%d", 0
+sendOp10			BYTE "%d_0_1_0", 0
+sendOp11			BYTE "%d_0_1_1", 0
+sendOp12			BYTE "%d_0_1_2", 0
+sendOp13			BYTE "%d_0_1_3", 0
+sendOp20			BYTE "%d_0_2_0", 0
+sendOp21			BYTE "%d_0_2_1", 0
+sendOp22			BYTE "%d_0_2_2", 0
+sendOp23			BYTE "%d_0_2_3", 0
 sendGetCanvas		BYTE "%d_1", 0
 pl					DWORD 0
 dir					DWORD 0
@@ -294,40 +301,40 @@ WinProc PROC,
 		.IF (wParam == 'w' || wParam == 'W')
 			MOV pl, 1
 			MOV dir, 0
-			INVOKE SendOperation, pl, dir
+			INVOKE SendOperation
 		.ELSEIF (wParam == 'a' || wParam == 'A')
 			MOV pl, 1
 			MOV dir, 2
-			INVOKE SendOperation, pl, dir
+			INVOKE SendOperation
 		.ELSEIF (wParam == 's' || wParam == 'S')
 			MOV pl, 1
 			MOV dir, 1
-			INVOKE SendOperation, pl, dir
+			INVOKE SendOperation
 		.ELSEIF (wParam == 'd' || wParam == 'D')
 			MOV pl, 1
 			MOV dir, 3
-			INVOKE SendOperation, pl, dir
+			INVOKE SendOperation
 		.ELSEIF (wParam == 'i' || wParam == 'I')
 			MOV pl, 2
 			MOV dir, 0
-			INVOKE SendOperation, pl, dir
+			INVOKE SendOperation
 		.ELSEIF (wParam == 'j' || wParam == 'J')
 			MOV pl, 2
 			MOV dir, 2
-			INVOKE SendOperation, pl, dir
+			INVOKE SendOperation
 		.ELSEIF (wParam == 'k' || wParam == 'K')
 			MOV pl, 2
 			MOV dir, 1
-			INVOKE SendOperation, pl, dir
+			INVOKE SendOperation
 		.ELSEIF (wParam == 'l' || wParam == 'L')
 			MOV pl, 2
 			MOV dir, 3
-			INVOKE SendOperation, pl, dir
+			INVOKE SendOperation
 		.ENDIF
 		INVOKE GamePaint, hWnd
 		jmp WinProcExit
 	.ELSEIF eax == WM_TIMER
-		INVOKE GetCanvas
+		INVOKE GetCanvas, hWnd
 		INVOKE GamePaint, hWnd
         xor eax, eax
         ret
@@ -421,55 +428,12 @@ send_init_err:
 InitSendSocket ENDP
 
 ;------------------------------------------------
-SendOperation PROC,
-	player:DWORD, direction:DWORD
-;------------------------------------------------
-	LOCAL receiverAddr	:sockaddr_in
-	LOCAL iRes			:DWORD
-	
-	INVOKE crt_memset, ADDR sendBuf, 0, 320
-	INVOKE crt_memset, ADDR receiverAddr, 0, 16
-
-	;receiverAddr.sin_port = htons(RECEIVERPORT);
-    ;receiverAddr.sin_family = AF_INET;
-    ;receiverAddr.sin_addr.S_un.S_addr = inet_addr(RECEIVERADDR);
-
-	INVOKE htons, RECEIVERPORT
-	MOV receiverAddr.sin_port, ax
-	MOV receiverAddr.sin_family, AF_INET
-	INVOKE inet_addr, ADDR RECEIVERADDR
-	MOV receiverAddr.sin_addr.S_un.S_addr, eax
-
-	xchg eax, ebx
-	xchg ebx, eax
-
-	INVOKE crt_printf, ADDR intmsg, pl
-	INVOKE crt_printf, ADDR intmsg, dir
-
-	push eax
-	xor eax, eax
-	mov ax, LISTENPORT
-	mov LISTENPORTDWORD, eax
-	pop eax
-
-	INVOKE crt_sprintf, ADDR sendBuf, ADDR sendMessage, LISTENPORTDWORD, pl, dir
-	INVOKE crt_printf, ADDR strmsg, ADDR sendBuf
-
-	xchg eax, ebx
-	xchg ebx, eax
-
-	INVOKE sendto, sendSocket, ADDR sendBuf, sendBufLength, 0, ADDR receiverAddr, 16
-
-	RET
-SendOperation ENDP
-
-;------------------------------------------------
-GetCanvas PROC
+SendOperation PROC
 ;------------------------------------------------
 	LOCAL receiverAddr	:sockaddr_in
 	LOCAL iRes			:DWORD
 
-	INVOKE crt_memset, ADDR sendBuf, 0, 320
+	INVOKE crt_memset, ADDR sendBuf, 0, 128
 	INVOKE crt_memset, ADDR recvBuf, 0, 7000
 	INVOKE crt_memset, ADDR receiverAddr, 0, 16
 
@@ -479,10 +443,59 @@ GetCanvas PROC
 	INVOKE inet_addr, ADDR RECEIVERADDR
 	MOV receiverAddr.sin_addr.S_un.S_addr, eax
 
+	.IF pl == 1
+		.IF dir == 0
+			INVOKE crt_sprintf, ADDR sendBuf, ADDR sendOp10, LISTENPORT
+		.ELSEIF dir == 1
+			INVOKE crt_sprintf, ADDR sendBuf, ADDR sendOp11, LISTENPORT
+		.ELSEIF dir == 2
+			INVOKE crt_sprintf, ADDR sendBuf, ADDR sendOp12, LISTENPORT
+		.ELSEIF dir == 3
+			INVOKE crt_sprintf, ADDR sendBuf, ADDR sendOp13, LISTENPORT
+		.ENDIF
+	.ELSE
+		.IF dir == 0
+			INVOKE crt_sprintf, ADDR sendBuf, ADDR sendOp20, LISTENPORT
+		.ELSEIF dir == 1
+			INVOKE crt_sprintf, ADDR sendBuf, ADDR sendOp21, LISTENPORT
+		.ELSEIF dir == 2
+			INVOKE crt_sprintf, ADDR sendBuf, ADDR sendOp22, LISTENPORT
+		.ELSEIF dir == 3
+			INVOKE crt_sprintf, ADDR sendBuf, ADDR sendOp23, LISTENPORT
+		.ENDIF
+	.ENDIF
+	
+	;INVOKE crt_sprintf, ADDR sendBuf, ADDR sendGetCanvas, LISTENPORT
+	;INVOKE crt_printf, ADDR strmsg, ADDR sendBuf
+	
+	INVOKE sendto, sendSocket, ADDR sendBuf, sendBufLength, 0, ADDR receiverAddr, 16
+	;INVOKE WSAGetLastError
+	;Mov iRes, eax
+	;INVOKE crt_printf, ADDR intmsg, iRes
+
+	RET
+SendOperation ENDP
+
+;------------------------------------------------
+GetCanvas PROC, hwnd:HWND
+;------------------------------------------------
+	LOCAL receiverAddr	:sockaddr_in
+	LOCAL iRes			:DWORD
+
+	INVOKE crt_memset, ADDR sendBuf, 0, 128
+	INVOKE crt_memset, ADDR recvBuf, 0, 7000
+	INVOKE crt_memset, ADDR receiverAddr, 0, 16
+
+	INVOKE htons, RECEIVERPORT
+	MOV receiverAddr.sin_port, ax
+	MOV receiverAddr.sin_family, AF_INET
+	INVOKE inet_addr, ADDR RECEIVERADDR
+	MOV receiverAddr.sin_addr.S_un.S_addr, eax
 	
 	INVOKE crt_sprintf, ADDR sendBuf, ADDR sendGetCanvas, LISTENPORT
 
 	INVOKE sendto, sendSocket, ADDR sendBuf, sendBufLength, 0, ADDR receiverAddr, 16
+
 	;INVOKE WSAGetLastError
 	;MOV iRes, eax
 	;INVOKE crt_printf, ADDR intmsg, iRes
@@ -490,6 +503,19 @@ GetCanvas PROC
 	INVOKE recvfrom, recvSocket, ADDR recvBuf, recvBufLength, 0, 0, 0
 	MOV iRes, eax
 	.IF iRes > 0
+		MOV esi, OFFSET recvBuf
+		MOV bl, BYTE PTR [esi]
+		.IF bl == "w"
+			ADD esi, 2
+			MOV bl, BYTE PTR [esi]
+			.IF bl == "0"
+				INVOKE MessageBox, hwnd, offset player1wintxt, offset gameovertxt, MB_OK
+				INVOKE ExitProcess, 0
+			.ELSE
+				INVOKE MessageBox, hwnd, offset player2wintxt, offset gameovertxt, MB_OK
+				INVOKE ExitProcess, 0
+			.ENDIF
+		.ENDIF
 		INVOKE crt_memset, ADDR canvas, 0, 6400
 		INVOKE crt_memcpy, ADDR canvas, ADDR recvBuf, 6400
 	.ENDIF

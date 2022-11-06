@@ -50,7 +50,7 @@
 #define INIT_LENGTH 3
 #define WINNING_LENGTH 20
 
-int FPS = 4;
+int FPS = 5;
 
 char canvas[N][N];
 int head_pos_x1 = 1, head_pos_y1 = 1;
@@ -65,6 +65,8 @@ enum Direction
 } direction1,
     direction2, dtmp1, dtmp2;
 
+int player1win = 0;
+int player2win = 0;
 //=================================SERVER==========================================
 
 WSAData wasData;
@@ -72,7 +74,6 @@ WSAData wasData;
 // receive
 SOCKET recvSocket;
 SOCKADDR_IN myAddr;
-
 
 // send
 SOCKET sendSocket;
@@ -147,6 +148,7 @@ int send_data(SOCKET sendSocket, u_short port, char *address, char *sendBuf, int
 
 //==============================================================================
 
+
 bool lose(int x, int y)
 {
     if (x >= N || y >= N || x < 0 || y < 0)
@@ -201,9 +203,11 @@ void snake_creep()
 
     if (lose(head_pos_x1, head_pos_y1))
     {
+        player2win = 1;
     }
     if (lose(head_pos_x2, head_pos_y2))
     {
+        player1win = 1;
     }
 
     for (int i = 0; i < N; i++)
@@ -274,9 +278,11 @@ void snake_creep()
 
     if (win(length1))
     {
+        player1win = 1;
     }
     if (win(length2))
     {
+        player2win = 1;
     }
 }
 
@@ -352,21 +358,21 @@ void canvasThread()
     }
 }
 
-/* void playerThread()
-{
-    SOCKET recv = init_recvSocket()
-} */
-
 int main()
 {
+    char portStr[32] = {0};
+    printf("listen port:\n");
+    scanf("%s", &portStr);
+    u_long listenport = atoi(portStr);
+
     initWSA(wasData);
-    init_recvSocket(23456);
+    init_recvSocket(listenport);
     init_sendSocket();
 
     int iRes;
 
-    char recvBuf[32] = {0};
-    int recvBufLength = 32;
+    char recvBuf[128] = {0};
+    int recvBufLength = 128;
 
     char sendBuf[7000] = {0};
     int sendBufLength = 7000;
@@ -391,11 +397,9 @@ int main()
         iRes = recvfrom(recvSocket, recvBuf, recvBufLength, 0, (SOCKADDR *)&playerAddr, &playerAddrLength);
         if (iRes > 0)
         {
+            
             int cmd, player, operation;
             char *tok;
-
-            // printf("recv info:");
-            // printf("%s\n", recvBuf);
 
             tok = strtok(recvBuf, split);
             playerAddr.sin_port = htons(atoi(tok));
@@ -405,6 +409,7 @@ int main()
             cmd = atoi(tok);
             if (cmd == 0)
             {
+                printf("recv: %s", recvBuf);
                 tok = strtok(NULL, split);
                 player = atoi(tok);
                 tok = strtok(NULL, split);
@@ -413,43 +418,25 @@ int main()
             }
             else if (cmd == 1)
             {
+                if (player1win)
+                {
+                    char tmp[] = "w_0";
+                    memcpy(sendBuf, tmp, sizeof(tmp));
+                    iRes = sendto(sendSocket, sendBuf, sendBufLength, 0, (SOCKADDR *)&playerAddr, sizeof(playerAddr));
+                    break;
+                }
+                if (player2win)
+                {
+                    char tmp[] = "w_1";
+                    memcpy(sendBuf, tmp, sizeof(tmp));
+                    iRes = sendto(sendSocket, sendBuf, sendBufLength, 0, (SOCKADDR *)&playerAddr, sizeof(playerAddr));
+                    break;
+                }
                 memcpy(sendBuf, canvas, sizeof(canvas));
                 iRes = sendto(sendSocket, sendBuf, sendBufLength, 0, (SOCKADDR *)&playerAddr, sizeof(playerAddr));
                 printf("send to %d\n", htons(playerAddr.sin_port));
-            } /*
-             else if (cmd == 2)
-             {
-                 u_long curAddr = playerAddr.sin_addr.S_un.S_addr;
-                 u_short curPort = playerAddr.sin_port;
-                 if (readyAddr != 0 && readyPort != 0 &&
-                     (curAddr != readyAddr || curPort != readyPort))
-                 {
-                     // send message 1
-                     playerAddr.sin_port = readyPort;
-                     playerAddr.sin_family = AF_INET;
-                     playerAddr.sin_addr.S_un.S_addr = readyAddr;
-                     sprintf(sendBuf, "start");
-                     iRes = sendto(sendSocket, sendBuf, sendBufLength, 0, (SOCKADDR *)&playerAddr, sizeof(playerAddr));
-                     printf("send to 1: %d, %d", readyPort, readyAddr);
-
-                     // send message 2
-                     playerAddr.sin_port = curPort;
-                     playerAddr.sin_family = AF_INET;
-                     playerAddr.sin_addr.S_un.S_addr = curAddr;
-                     sprintf(sendBuf, "start");
-                     iRes = sendto(sendSocket, sendBuf, sendBufLength, 0, (SOCKADDR *)&playerAddr, sizeof(playerAddr));
-                     printf("send to 2: %d, %d", curPort, curAddr);
-
-
-                     std::thread canvas_thread(canvasThread);
-                     canvas_thread.detach();
-                     printf("game start!\n");
-                     continue;
-                 }
-                 readyAddr = curAddr;
-                 readyPort = curPort;
-                 printf("player comes!\n");
-             } */
+            }
         }
     }
+    printf("Game over!");
 }
