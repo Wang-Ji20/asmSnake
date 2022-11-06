@@ -186,6 +186,8 @@ WinMain PROC
 	  call ErrorHandler
 	  jmp  Exit_Program
 	.ENDIF
+	
+	INVOKE SetWindowPos, hMainWnd, 0, 0, 0, 820, 840, 0
 
 ; Show and draw the window.
 	INVOKE ShowWindow, hMainWnd, SW_SHOW
